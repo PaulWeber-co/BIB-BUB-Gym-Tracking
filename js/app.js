@@ -1,262 +1,177 @@
-/* ============================================
-   APP – Main navigation & initialization
-   ============================================ */
+/* ============================================================
+   APP — bootstrap, tab navigation and global wiring.
+   ============================================================ */
 
 const App = (() => {
-    let exercisePickerCallback = null;
-    let confirmCallback = null;
-    let isTemplateEditorActive = false;
 
-    // ---------- Show View (Bottom Nav) ----------
-    function showView(viewId) {
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        const view = document.getElementById(viewId);
-        if (view) view.classList.add('active');
+    let activeTab = 'summary';
+    const scrollPos = {};
 
-        // Update nav tabs
-        document.querySelectorAll('.nav-tab').forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.view === viewId);
+    const VIEWS = {
+        summary: { id: 'view-summary', render: () => Summary.render() },
+        routines: { id: 'view-routines', render: () => Routines.render() },
+        history: { id: 'view-history', render: () => History.render() },
+        trends: { id: 'view-trends', render: () => Trends.render() },
+        exercises: { id: 'view-exercises', render: () => Exercises.render() },
+    };
+
+    // ------------------------------------------------------------
+    // Navigation
+    // ------------------------------------------------------------
+    function showTab(name) {
+        if (!VIEWS[name]) return;
+        if (name === activeTab) {
+            VIEWS[name].render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+
+        scrollPos[activeTab] = window.scrollY;
+        activeTab = name;
+
+        Object.entries(VIEWS).forEach(([key, view]) => {
+            document.getElementById(view.id).classList.toggle('is-active', key === name);
+        });
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.toggle('is-active', tab.dataset.tab === name);
         });
 
-        // Refresh view content
-        switch (viewId) {
-            case 'view-dashboard':
-                refreshDashboard();
-                break;
-            case 'view-templates':
-                Templates.renderTemplates();
-                break;
-            case 'view-exercises':
-                Exercises.renderExerciseList();
-                break;
-            case 'view-history':
-                History.renderHistory();
-                break;
-            case 'view-progress':
-                Charts.renderProgressView();
-                break;
+        VIEWS[name].render();
+        window.scrollTo(0, scrollPos[name] || 0);
+        updateNavShadow();
+    }
+
+    function refreshAll() {
+        VIEWS[activeTab].render();
+        refreshMiniBar();
+    }
+
+    function refreshMiniBar() {
+        const mini = document.getElementById('mini-workout');
+        const anyScreen = document.querySelector('.screen.is-open');
+        const show = Workout.isActive() && !anyScreen;
+        mini.hidden = !show;
+        document.body.classList.toggle('has-mini', show);
+        if (show) {
+            document.getElementById('mini-workout-time').textContent =
+                Stats.fmtClock(Date.now() - Workout.startedAt());
         }
     }
 
-    // ---------- Refresh Dashboard ----------
-    function refreshDashboard() {
-        Templates.renderDashboardTemplates();
-        History.renderRecentWorkouts();
+    async function startEmptyWorkout() {
+        if (Workout.isActive()) {
+            Workout.resume();
+            return;
+        }
+        UI.unlockAudio();
+        Workout.start();
     }
 
-    // ---------- Exercise Picker Modal ----------
-    function openExercisePicker(callback) {
-        exercisePickerCallback = callback;
-        document.getElementById('picker-search').value = '';
-        document.getElementById('picker-filter-muscle').value = '';
-        renderPickerExercises();
-        document.getElementById('modal-exercise-picker').classList.add('active');
+    function updateNavShadow() {
+        const view = document.querySelector('.view.is-active .nav-bar');
+        if (view) view.classList.toggle('is-scrolled', window.scrollY > 4);
     }
 
-    function closeExercisePicker() {
-        document.getElementById('modal-exercise-picker').classList.remove('active');
-        exercisePickerCallback = null;
-    }
-
-    function renderPickerExercises() {
-        const query = document.getElementById('picker-search').value;
-        const muscle = document.getElementById('picker-filter-muscle').value;
-        const exercises = GymData.searchExercises(query, muscle);
-        const container = document.getElementById('picker-exercise-list');
-
-        container.innerHTML = exercises.map(ex => `
-            <div class="exercise-item" data-id="${ex.id}" data-action="pick-exercise">
-                <div class="exercise-item-info">
-                    <div class="exercise-item-name">
-                        ${ex.name}
-                        ${ex.isCustom ? '<span class="badge-custom">Custom</span>' : ''}
-                    </div>
-                    <div class="exercise-item-meta">${ex.muscleGroup} · ${ex.category}</div>
-                </div>
-            </div>
-        `).join('');
-
-        container.querySelectorAll('[data-action="pick-exercise"]').forEach(item => {
-            item.addEventListener('click', () => {
-                if (exercisePickerCallback) {
-                    exercisePickerCallback(item.dataset.id);
-                }
-                closeExercisePicker();
-            });
-        });
-    }
-
-    // ---------- Confirm Dialog ----------
-    function showConfirm(title, message, onConfirm) {
-        document.getElementById('confirm-title').textContent = title;
-        document.getElementById('confirm-message').textContent = message;
-        confirmCallback = onConfirm;
-        document.getElementById('modal-confirm').classList.add('active');
-    }
-
-    function closeConfirm() {
-        document.getElementById('modal-confirm').classList.remove('active');
-        confirmCallback = null;
-    }
-
-    // ---------- Initialize App ----------
+    // ------------------------------------------------------------
+    // Init
+    // ------------------------------------------------------------
     function init() {
-        // Bottom Navigation
-        document.querySelectorAll('.nav-tab').forEach(tab => {
+        // module wiring
+        Summary.bind();
+        Routines.bind();
+        History.bind();
+        Trends.bind();
+        Exercises.bind();
+        Workout.bind();
+
+        document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
-                showView(tab.dataset.view);
+                UI.haptic(6);
+                showTab(tab.dataset.tab);
             });
         });
 
-        // Dashboard: Start empty workout
-        document.getElementById('btn-start-empty-workout').addEventListener('click', () => {
-            Workout.startWorkout();
+        document.getElementById('mini-workout').addEventListener('click', () => Workout.resume());
+
+        window.addEventListener('scroll', updateNavShadow, { passive: true });
+
+        // audio needs a gesture before it can play the rest timer tone
+        document.addEventListener('pointerdown', () => UI.unlockAudio(), { once: true });
+
+        // restore a workout that was interrupted by a reload or by iOS
+        if (Workout.restore()) {
+            refreshMiniBar();
+            setInterval(() => { if (!UI.screenOpen('screen-workout')) refreshMiniBar(); }, 1000);
+        }
+
+        // keep clocks honest after the tab was in the background
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'visible') return;
+            if (Workout.isActive()) Workout.tick();
+            refreshMiniBar();
         });
 
-        // Workout: Cancel
-        document.getElementById('btn-cancel-workout').addEventListener('click', () => {
-            if (Workout.isActive()) {
-                showConfirm(
-                    'Discard Workout',
-                    'Are you sure you want to discard this workout?',
-                    () => { Workout.cancelWorkout(); }
-                );
+        // A back gesture should close the top layer rather than leave the app.
+        // Only when nothing is open and we are already on Summary do we let the
+        // browser navigate away.
+        history.replaceState({ app: true }, '');
+        window.addEventListener('popstate', () => {
+            let handled = UI.closeTop();
+            if (!handled) {
+                const screen = document.querySelector('.screen.is-open');
+                if (screen) {
+                    if (screen.id === 'screen-workout') Workout.minimize();
+                    else UI.closeScreen(screen.id);
+                    handled = true;
+                }
             }
-        });
-
-        // Workout: Finish
-        document.getElementById('btn-finish-workout').addEventListener('click', () => {
-            Workout.finishWorkout();
-        });
-
-        // Workout: Add exercise
-        document.getElementById('btn-add-exercise-to-workout').addEventListener('click', () => {
-            openExercisePicker((exerciseId) => {
-                Workout.addExercise(exerciseId);
-            });
-        });
-
-        // Templates: Create new
-        document.getElementById('btn-create-template').addEventListener('click', () => {
-            isTemplateEditorActive = true;
-            Templates.openTemplateEditor();
-        });
-
-        // Template Editor: Cancel
-        document.getElementById('btn-cancel-template-edit').addEventListener('click', () => {
-            isTemplateEditorActive = false;
-            Templates.closeTemplateEditor();
-        });
-
-        // Template Editor: Save
-        document.getElementById('btn-save-template').addEventListener('click', () => {
-            isTemplateEditorActive = false;
-            Templates.saveTemplate();
-        });
-
-        // Template Editor: Add exercise
-        document.getElementById('btn-add-exercise-to-template').addEventListener('click', () => {
-            openExercisePicker((exerciseId) => {
-                Templates.addExerciseToTemplate(exerciseId);
-            });
-        });
-
-        // Exercises Tab: Open create exercise
-        document.getElementById('btn-open-create-exercise').addEventListener('click', () => {
-            Exercises.openCreateExerciseForm();
-        });
-
-        // Exercise Picker: Create new exercise from picker
-        document.getElementById('btn-picker-create-exercise').addEventListener('click', () => {
-            Exercises.openCreateExerciseForm();
-        });
-
-        // Create Exercise Modal: Save
-        document.getElementById('btn-save-exercise').addEventListener('click', () => {
-            Exercises.saveExercise();
-            // Also refresh picker if it's open
-            if (document.getElementById('modal-exercise-picker').classList.contains('active')) {
-                renderPickerExercises();
+            if (!handled && activeTab !== 'summary') {
+                showTab('summary');
+                handled = true;
             }
+            if (handled) history.pushState({ app: true }, '');
         });
+        history.pushState({ app: true }, '');
 
-        // Create Exercise Modal: Close
-        document.getElementById('btn-close-create-exercise').addEventListener('click', () => {
-            Exercises.closeCreateExerciseModal();
-        });
+        showTab('summary');
+        refreshMiniBar();
 
-        // Exercise Picker: Close
-        document.getElementById('btn-close-exercise-picker').addEventListener('click', () => {
-            closeExercisePicker();
-        });
-
-        // Exercise Picker: Search & Filter
-        document.getElementById('picker-search').addEventListener('input', renderPickerExercises);
-        document.getElementById('picker-filter-muscle').addEventListener('change', renderPickerExercises);
-
-        // Exercise List: Search & Filter
-        document.getElementById('exercises-search').addEventListener('input', () => {
-            Exercises.renderExerciseList();
-        });
-        document.getElementById('exercises-filter-muscle').addEventListener('change', () => {
-            Exercises.renderExerciseList();
-        });
-
-        // Workout Detail: Close
-        document.getElementById('btn-close-workout-detail').addEventListener('click', () => {
-            History.closeWorkoutDetail();
-        });
-
-        // Workout Detail: Delete
-        document.getElementById('btn-delete-workout').addEventListener('click', () => {
-            History.deleteWorkoutFromDetail();
-        });
-
-        // Progress: Exercise select
-        document.getElementById('progress-exercise-select').addEventListener('change', (e) => {
-            Charts.updateChart(e.target.value);
-        });
-
-        // Progress: Metric tabs
-        document.querySelectorAll('.metric-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.metric-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                const exerciseId = document.getElementById('progress-exercise-select').value;
-                Charts.updateChart(exerciseId, tab.dataset.metric);
-            });
-        });
-
-        // Timer: Presets
-        document.querySelectorAll('.timer-preset').forEach(btn => {
-            btn.addEventListener('click', () => {
-                Timer.selectDuration(Number(btn.dataset.seconds));
-            });
-        });
-
-        // Timer: Start/Stop/Close
-        document.getElementById('btn-timer-start').addEventListener('click', Timer.startTimer);
-        document.getElementById('btn-timer-stop').addEventListener('click', Timer.stopTimer);
-        document.getElementById('btn-close-timer').addEventListener('click', Timer.closeTimerModal);
-
-        // Confirm Dialog
-        document.getElementById('btn-confirm-ok').addEventListener('click', () => {
-            if (confirmCallback) confirmCallback();
-            closeConfirm();
-        });
-        document.getElementById('btn-confirm-cancel').addEventListener('click', closeConfirm);
-
-        // Initial render
-        refreshDashboard();
+        registerServiceWorker();
+        backupReminder();
     }
 
-    // ---------- Start ----------
+    function registerServiceWorker() {
+        if (!('serviceWorker' in navigator)) return;
+        if (location.protocol === 'file:') return;
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });
+        });
+    }
+
+    /** iOS clears storage of rarely used sites, so nudge towards a backup. */
+    function backupReminder() {
+        const workouts = Store.workouts().length;
+        if (workouts < 6) return;
+        const meta = Store.meta();
+        const last = meta.lastExport ? new Date(meta.lastExport) : null;
+        const daysSince = last ? (Date.now() - last.getTime()) / 86400000 : Infinity;
+        const remindedAt = meta.lastBackupReminder ? new Date(meta.lastBackupReminder) : null;
+        const daysSinceReminder = remindedAt ? (Date.now() - remindedAt.getTime()) / 86400000 : Infinity;
+
+        if (daysSince > 30 && daysSinceReminder > 14) {
+            Store.setMeta('lastBackupReminder', new Date().toISOString());
+            setTimeout(() => {
+                UI.toast({
+                    title: 'Back up your training log',
+                    sub: 'Settings → Export backup',
+                    tone: 'warn',
+                    duration: 5000,
+                });
+            }, 1500);
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', init);
 
-    return {
-        showView,
-        refreshDashboard,
-        openExercisePicker,
-        showConfirm,
-    };
+    return { showTab, refreshAll, refreshMiniBar, startEmptyWorkout };
 })();
