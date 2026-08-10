@@ -3,346 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="description" content="Track your gym workouts, create custom exercises, and monitor your progress.">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="description" content="Gym workout tracker with activity rings, progress trends and offline storage.">
+    <meta name="theme-color" content="#000000">
+    <meta name="color-scheme" content="dark">
 
     <!-- iOS PWA / Home Screen -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="BIB-BUB Gym">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Gym">
     <meta name="format-detection" content="telephone=no">
+    <link rel="apple-touch-icon" href="icons/icon-180.png">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="manifest" href="manifest.webmanifest">
 
-    <title>BIB-BUB Gym Tracker</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <title>Gym</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-    <!-- ======================================== -->
-    <!-- DASHBOARD VIEW                           -->
-    <!-- ======================================== -->
-    <div id="view-dashboard" class="view active">
-        <header class="view-header">
-            <h1>BIB-BUB Gym</h1>
-        </header>
-        <div class="view-content">
-            <button id="btn-start-empty-workout" class="btn btn-primary btn-large">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Start Empty Workout
+<!-- ============================================================ -->
+<!-- SUMMARY                                                      -->
+<!-- ============================================================ -->
+<section id="view-summary" class="view is-active" data-view="summary">
+    <header class="nav-bar">
+        <div class="nav-bar-inner">
+            <div>
+                <p class="nav-eyebrow" id="summary-date"></p>
+                <h1 class="nav-title">Summary</h1>
+            </div>
+            <button class="nav-action" id="btn-open-settings" aria-label="Settings">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.36.4.66.73.86.3.18.65.28 1 .28H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </button>
-
-            <section class="dashboard-section">
-                <div class="section-header">
-                    <h2>Quick Start from Template</h2>
-                </div>
-                <div id="dashboard-templates-list" class="template-quick-list">
-                    <p class="empty-state">No templates yet. Create one in the Templates tab!</p>
-                </div>
-            </section>
-
-            <section class="dashboard-section">
-                <div class="section-header">
-                    <h2>Recent Workouts</h2>
-                </div>
-                <div id="dashboard-recent-list" class="recent-workouts-list">
-                    <p class="empty-state">No workouts yet. Start your first one!</p>
-                </div>
-            </section>
         </div>
-    </div>
+    </header>
+    <div class="view-body" id="summary-body"></div>
+</section>
 
-    <!-- ======================================== -->
-    <!-- TEMPLATES VIEW                           -->
-    <!-- ======================================== -->
-    <div id="view-templates" class="view">
-        <header class="view-header">
-            <h1>Templates</h1>
-            <button id="btn-create-template" class="header-btn">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+<!-- ============================================================ -->
+<!-- WORKOUT / ROUTINES                                           -->
+<!-- ============================================================ -->
+<section id="view-routines" class="view" data-view="routines">
+    <header class="nav-bar">
+        <div class="nav-bar-inner">
+            <h1 class="nav-title">Workout</h1>
+            <button class="nav-action" id="btn-new-routine" aria-label="New routine">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
-        </header>
-        <div class="view-content">
-            <div id="templates-list">
-                <p class="empty-state">No templates yet.<br>Tap + to create your first routine!</p>
-            </div>
         </div>
-    </div>
+    </header>
+    <div class="view-body" id="routines-body"></div>
+</section>
 
-    <!-- ======================================== -->
-    <!-- HISTORY VIEW                             -->
-    <!-- ======================================== -->
-    <div id="view-history" class="view">
-        <header class="view-header">
-            <h1>History</h1>
-        </header>
-        <div class="view-content">
-            <div id="history-list">
-                <p class="empty-state">No workout history yet.<br>Complete a workout to see it here!</p>
-            </div>
+<!-- ============================================================ -->
+<!-- HISTORY                                                      -->
+<!-- ============================================================ -->
+<section id="view-history" class="view" data-view="history">
+    <header class="nav-bar">
+        <div class="nav-bar-inner">
+            <h1 class="nav-title">History</h1>
         </div>
-    </div>
+    </header>
+    <div class="view-body" id="history-body"></div>
+</section>
 
-    <!-- ======================================== -->
-    <!-- PROGRESS VIEW                            -->
-    <!-- ======================================== -->
-    <div id="view-progress" class="view">
-        <header class="view-header">
-            <h1>Progress</h1>
-        </header>
-        <div class="view-content">
-            <div class="progress-controls">
-                <select id="progress-exercise-select" class="select-input">
-                    <option value="">Select an exercise...</option>
-                </select>
-                <div class="metric-tabs">
-                    <button class="metric-tab active" data-metric="maxWeight">Max Weight</button>
-                    <button class="metric-tab" data-metric="volume">Volume</button>
-                    <button class="metric-tab" data-metric="est1rm">Est. 1RM</button>
-                </div>
-            </div>
-            <div class="chart-container">
-                <canvas id="progress-chart"></canvas>
-                <p id="chart-empty-state" class="empty-state">Select an exercise to view your progress.</p>
-            </div>
+<!-- ============================================================ -->
+<!-- TRENDS                                                       -->
+<!-- ============================================================ -->
+<section id="view-trends" class="view" data-view="trends">
+    <header class="nav-bar">
+        <div class="nav-bar-inner">
+            <h1 class="nav-title">Trends</h1>
         </div>
-    </div>
+    </header>
+    <div class="view-body" id="trends-body"></div>
+</section>
 
-    <!-- ======================================== -->
-    <!-- EXERCISES VIEW                           -->
-    <!-- ======================================== -->
-    <div id="view-exercises" class="view">
-        <header class="view-header">
-            <h1>Exercises</h1>
-            <button id="btn-open-create-exercise" class="header-btn">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+<!-- ============================================================ -->
+<!-- EXERCISES                                                    -->
+<!-- ============================================================ -->
+<section id="view-exercises" class="view" data-view="exercises">
+    <header class="nav-bar">
+        <div class="nav-bar-inner">
+            <h1 class="nav-title">Exercises</h1>
+            <button class="nav-action" id="btn-new-exercise" aria-label="New exercise">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
-        </header>
-        <div class="view-content">
-            <div class="filter-bar">
-                <input type="text" id="exercises-search" class="search-input" placeholder="Search exercises...">
-                <select id="exercises-filter-muscle" class="select-input">
-                    <option value="">All Muscles</option>
-                    <option value="Chest">Chest</option>
-                    <option value="Back">Back</option>
-                    <option value="Legs">Legs</option>
-                    <option value="Shoulders">Shoulders</option>
-                    <option value="Arms">Arms</option>
-                    <option value="Core">Core</option>
-                </select>
-            </div>
-            <div id="exercises-list" class="exercise-list"></div>
         </div>
-    </div>
+    </header>
+    <div class="view-body" id="exercises-body"></div>
+</section>
 
-    <!-- ======================================== -->
-    <!-- ACTIVE WORKOUT VIEW (Full-screen overlay)-->
-    <!-- ======================================== -->
-    <div id="view-workout" class="view-overlay">
-        <header class="overlay-header">
-            <button id="btn-cancel-workout" class="header-text-btn">Cancel</button>
-            <div class="workout-timer-display" id="workout-duration">00:00</div>
-            <button id="btn-finish-workout" class="header-text-btn btn-finish">Finish</button>
-        </header>
-        <div class="overlay-content" id="workout-exercise-list">
-            <!-- Exercises will be rendered here -->
+<!-- ============================================================ -->
+<!-- ACTIVE WORKOUT (full screen)                                 -->
+<!-- ============================================================ -->
+<section id="screen-workout" class="screen">
+    <header class="screen-bar">
+        <button class="bar-btn" id="btn-workout-cancel">Cancel</button>
+        <div class="workout-headline">
+            <span class="workout-clock" id="workout-clock">0:00</span>
+            <span class="workout-subline" id="workout-subline">0 kg &middot; 0 sets</span>
         </div>
-        <div class="workout-bottom-actions">
-            <button id="btn-add-exercise-to-workout" class="btn btn-outline btn-large">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Exercise
+        <button class="bar-btn bar-btn-strong" id="btn-workout-finish">Finish</button>
+    </header>
+    <div class="screen-body" id="workout-body"></div>
+    <div class="rest-bar" id="rest-bar" hidden>
+        <div class="rest-progress" id="rest-progress"></div>
+        <div class="rest-content">
+            <button class="rest-adjust" data-rest-adjust="-15">&minus;15</button>
+            <div class="rest-center">
+                <span class="rest-label">Rest</span>
+                <span class="rest-time" id="rest-time">1:30</span>
+            </div>
+            <button class="rest-adjust" data-rest-adjust="15">+15</button>
+            <button class="rest-skip" id="btn-rest-skip" aria-label="Skip rest">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
     </div>
+</section>
 
-    <!-- ======================================== -->
-    <!-- TEMPLATE EDITOR (Full-screen overlay)    -->
-    <!-- ======================================== -->
-    <div id="view-template-editor" class="view-overlay">
-        <header class="overlay-header">
-            <button id="btn-cancel-template-edit" class="header-text-btn">Cancel</button>
-            <h2 class="overlay-title" id="template-editor-title">New Template</h2>
-            <button id="btn-save-template" class="header-text-btn btn-finish">Save</button>
-        </header>
-        <div class="overlay-content">
-            <div class="form-group" style="padding: 16px;">
-                <input type="text" id="template-name-input" class="text-input" placeholder="Template Name (e.g. Push Day)">
-            </div>
-            <div id="template-exercise-list">
-                <!-- Template exercises rendered here -->
-            </div>
-            <div class="workout-bottom-actions">
-                <button id="btn-add-exercise-to-template" class="btn btn-outline btn-large">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Add Exercise
-                </button>
-            </div>
-        </div>
-    </div>
+<!-- ============================================================ -->
+<!-- ROUTINE EDITOR (full screen)                                 -->
+<!-- ============================================================ -->
+<section id="screen-routine-editor" class="screen">
+    <header class="screen-bar">
+        <button class="bar-btn" id="btn-routine-cancel">Cancel</button>
+        <h2 class="screen-title" id="routine-editor-title">New Routine</h2>
+        <button class="bar-btn bar-btn-strong" id="btn-routine-save">Save</button>
+    </header>
+    <div class="screen-body" id="routine-editor-body"></div>
+</section>
 
-    <!-- ======================================== -->
-    <!-- WORKOUT DETAIL (Full-screen overlay)     -->
-    <!-- ======================================== -->
-    <div id="view-workout-detail" class="view-overlay">
-        <header class="overlay-header">
-            <button id="btn-close-workout-detail" class="header-text-btn">Back</button>
-            <h2 class="overlay-title">Workout Detail</h2>
-            <button id="btn-delete-workout" class="header-text-btn" style="color: #dc3545;">Delete</button>
-        </header>
-        <div class="overlay-content" id="workout-detail-content">
-            <!-- Detail rendered here -->
-        </div>
-    </div>
-
-    <!-- ======================================== -->
-    <!-- EXERCISE PICKER MODAL                    -->
-    <!-- ======================================== -->
-    <div id="modal-exercise-picker" class="modal">
-        <div class="modal-content modal-fullscreen">
-            <header class="overlay-header">
-                <button id="btn-close-exercise-picker" class="header-text-btn">Cancel</button>
-                <h2 class="overlay-title">Select Exercise</h2>
-                <button id="btn-picker-create-exercise" class="header-text-btn btn-finish">New</button>
-            </header>
-            <div class="modal-body">
-                <div class="filter-bar">
-                    <input type="text" id="picker-search" class="search-input" placeholder="Search exercises...">
-                    <select id="picker-filter-muscle" class="select-input">
-                        <option value="">All Muscles</option>
-                        <option value="Chest">Chest</option>
-                        <option value="Back">Back</option>
-                        <option value="Legs">Legs</option>
-                        <option value="Shoulders">Shoulders</option>
-                        <option value="Arms">Arms</option>
-                        <option value="Core">Core</option>
-                    </select>
-                </div>
-                <div id="picker-exercise-list" class="exercise-list"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ======================================== -->
-    <!-- CREATE/EDIT EXERCISE MODAL               -->
-    <!-- ======================================== -->
-    <div id="modal-create-exercise" class="modal">
-        <div class="modal-content">
-            <header class="modal-header">
-                <h2 id="create-exercise-title">New Exercise</h2>
-                <button id="btn-close-create-exercise" class="modal-close-btn">&times;</button>
-            </header>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="exercise-name-input">Exercise Name</label>
-                    <input type="text" id="exercise-name-input" class="text-input" placeholder="e.g. Cable Lateral Raise">
-                </div>
-                <div class="form-group">
-                    <label for="exercise-muscle-select">Muscle Group</label>
-                    <select id="exercise-muscle-select" class="select-input">
-                        <option value="">Select...</option>
-                        <option value="Chest">Chest</option>
-                        <option value="Back">Back</option>
-                        <option value="Legs">Legs</option>
-                        <option value="Shoulders">Shoulders</option>
-                        <option value="Arms">Arms</option>
-                        <option value="Core">Core</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="exercise-category-select">Category</label>
-                    <select id="exercise-category-select" class="select-input">
-                        <option value="">Select...</option>
-                        <option value="Barbell">Barbell</option>
-                        <option value="Dumbbell">Dumbbell</option>
-                        <option value="Machine">Machine</option>
-                        <option value="Cable">Cable</option>
-                        <option value="Bodyweight">Bodyweight</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
-                <div class="form-group-checkbox">
-                    <label class="checkbox-label" for="exercise-unilateral-checkbox">
-                        <input type="checkbox" id="exercise-unilateral-checkbox">
-                        <span>Unilateral (Track Left & Right side separately)</span>
-                    </label>
-                </div>
-                <input type="hidden" id="exercise-edit-id" value="">
-                <button id="btn-save-exercise" class="btn btn-primary btn-large">Save Exercise</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ======================================== -->
-    <!-- REST TIMER MODAL                         -->
-    <!-- ======================================== -->
-    <div id="modal-timer" class="modal modal-timer">
-        <div class="modal-content modal-timer-content">
-            <div class="timer-display" id="timer-display">01:30</div>
-            <div class="timer-buttons">
-                <button class="timer-preset" data-seconds="30">0:30</button>
-                <button class="timer-preset" data-seconds="60">1:00</button>
-                <button class="timer-preset active" data-seconds="90">1:30</button>
-                <button class="timer-preset" data-seconds="120">2:00</button>
-                <button class="timer-preset" data-seconds="180">3:00</button>
-            </div>
-            <div class="timer-actions">
-                <button id="btn-timer-start" class="btn btn-primary">Start</button>
-                <button id="btn-timer-stop" class="btn btn-outline" style="display:none;">Stop</button>
-            </div>
-            <button id="btn-close-timer" class="btn btn-ghost">Close</button>
-        </div>
-    </div>
-
-    <!-- ======================================== -->
-    <!-- CONFIRM DIALOG                           -->
-    <!-- ======================================== -->
-    <div id="modal-confirm" class="modal">
-        <div class="modal-content modal-small">
-            <h3 id="confirm-title">Are you sure?</h3>
-            <p id="confirm-message">This action cannot be undone.</p>
-            <div class="confirm-actions">
-                <button id="btn-confirm-cancel" class="btn btn-outline">Cancel</button>
-                <button id="btn-confirm-ok" class="btn btn-primary">Confirm</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ======================================== -->
-    <!-- BOTTOM NAVIGATION                        -->
-    <!-- ======================================== -->
-    <nav id="bottom-nav">
-        <button class="nav-tab active" data-view="view-dashboard">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            <span>Home</span>
+<!-- ============================================================ -->
+<!-- WORKOUT DETAIL (full screen)                                 -->
+<!-- ============================================================ -->
+<section id="screen-workout-detail" class="screen">
+    <header class="screen-bar">
+        <button class="bar-btn" id="btn-detail-back">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back
         </button>
-        <button class="nav-tab" data-view="view-templates">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-            <span>Templates</span>
+        <h2 class="screen-title">Workout</h2>
+        <button class="bar-btn" id="btn-detail-menu" aria-label="More">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
         </button>
-        <button class="nav-tab" data-view="view-exercises">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-            <span>Exercises</span>
-        </button>
-        <button class="nav-tab" data-view="view-history">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span>History</span>
-        </button>
-        <button class="nav-tab" data-view="view-progress">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <span>Progress</span>
-        </button>
-    </nav>
+    </header>
+    <div class="screen-body" id="workout-detail-body"></div>
+</section>
 
-    <!-- Scripts (order matters) -->
-    <script src="js/data.js"></script>
-    <script src="js/timer.js"></script>
-    <script src="js/exercises.js"></script>
-    <script src="js/workout.js"></script>
-    <script src="js/templates.js"></script>
-    <script src="js/history.js"></script>
-    <script src="js/charts.js"></script>
-    <script src="js/app.js"></script>
+<!-- ============================================================ -->
+<!-- EXERCISE DETAIL (full screen)                                -->
+<!-- ============================================================ -->
+<section id="screen-exercise-detail" class="screen">
+    <header class="screen-bar">
+        <button class="bar-btn" id="btn-exercise-detail-back">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back
+        </button>
+        <h2 class="screen-title" id="exercise-detail-title">Exercise</h2>
+        <button class="bar-btn" id="btn-exercise-detail-menu" aria-label="More">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        </button>
+    </header>
+    <div class="screen-body" id="exercise-detail-body"></div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB BAR                                                      -->
+<!-- ============================================================ -->
+<nav class="tab-bar" id="tab-bar">
+    <button class="tab" data-tab="summary" aria-label="Summary">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.4"/></svg>
+        <span>Summary</span>
+    </button>
+    <button class="tab" data-tab="routines" aria-label="Workout">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6"/><path d="M7 6.5v11"/><path d="M17 6.5v11"/><path d="M20 9v6"/><path d="M7 12h10"/></svg>
+        <span>Workout</span>
+    </button>
+    <button class="tab" data-tab="history" aria-label="History">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="3" y1="9.5" x2="21" y2="9.5"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>
+        <span>History</span>
+    </button>
+    <button class="tab" data-tab="trends" aria-label="Trends">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 16.5 9 10.5 13 14.5 21 6.5"/><polyline points="15 6.5 21 6.5 21 12.5"/></svg>
+        <span>Trends</span>
+    </button>
+    <button class="tab" data-tab="exercises" aria-label="Exercises">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6.5" x2="20" y2="6.5"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="17.5" x2="20" y2="17.5"/><circle cx="4.5" cy="6.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="17.5" r="1.3" fill="currentColor" stroke="none"/></svg>
+        <span>Exercises</span>
+    </button>
+</nav>
+
+<!-- Mini bar for a workout that is running in the background -->
+<div class="mini-workout" id="mini-workout" hidden>
+    <div class="mini-workout-dot"></div>
+    <div class="mini-workout-text">
+        <span class="mini-workout-title">Workout in progress</span>
+        <span class="mini-workout-time" id="mini-workout-time">0:00</span>
+    </div>
+    <span class="mini-workout-cta">Resume</span>
+</div>
+
+<!-- Sheets / dialogs / toasts are injected here -->
+<div id="sheet-host"></div>
+<div id="toast-host" class="toast-host"></div>
+
+<script src="js/store.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/picker.js"></script>
+<script src="js/workout.js"></script>
+<script src="js/routines.js"></script>
+<script src="js/history.js"></script>
+<script src="js/trends.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/summary.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

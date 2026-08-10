@@ -1,398 +1,869 @@
-/* ============================================
-   WORKOUT TRACKING – Start, track sets, finish
-   ============================================ */
+/* ============================================================
+   WORKOUT — the live training screen.
+   The running workout is mirrored into localStorage after every
+   change, so a reload (or iOS discarding the tab) never loses it.
+   ============================================================ */
 
 const Workout = (() => {
-    let currentWorkout = null;
-    let workoutStartTime = null;
-    let durationInterval = null;
 
-    // ---------- Start Workout ----------
-    function startWorkout(templateId = null) {
-        currentWorkout = {
-            exercises: [],
+    let current = null;          // { id, date, startedAt, name, routineId, exercises[], rest }
+    let tickTimer = null;
+    let bestCache = {};          // exerciseId -> { e1rm, weight } before this workout
+    let rest = null;             // { endsAt, total }
+
+    const body = () => document.getElementById('workout-body');
+
+    // ------------------------------------------------------------
+    // Lifecycle
+    // ------------------------------------------------------------
+    function start(routineId = null) {
+        const routine = routineId ? Store.routine(routineId) : null;
+
+        current = {
+            id: Store.uid('workout'),
             date: new Date().toISOString(),
+            startedAt: Date.now(),
+            name: routine ? routine.name : '',
+            routineId: routineId || null,
+            exercises: [],
         };
-        workoutStartTime = Date.now();
 
-        // If starting from template, pre-fill exercises
-        if (templateId) {
-            const template = GymData.getTemplateById(templateId);
-            if (template) {
-                currentWorkout.exercises = template.exercises.map(ex => ({
-                    exerciseId: ex.exerciseId,
-                    notes: '',
-                    sets: ex.sets.map(s => ({
-                        weight: s.weight || '',
-                        reps: s.reps || '',
-                        completed: false,
-                    })),
+        if (routine) {
+            routine.exercises.forEach(ex => addExerciseObject(ex.exerciseId, {
+                isUnilateral: ex.isUnilateral,
+                restSeconds: ex.restSeconds,
+                sets: (ex.sets || []).map(s => ({
+                    weight: s.weight === '' || s.weight === undefined ? '' : Number(s.weight),
+                    reps: s.reps === '' || s.reps === undefined ? '' : Number(s.reps),
+                    repsL: s.repsL === '' || s.repsL === undefined ? '' : Number(s.repsL),
+                    repsR: s.repsR === '' || s.repsR === undefined ? '' : Number(s.repsR),
+                    type: s.type || 'normal',
+                    completed: false,
+                })),
+            }));
+        }
+
+        primeCache();
+        persist();
+        openScreen();
+        render();
+    }
+
+    function restore() {
+        const saved = Store.activeWorkout();
+        if (!saved || !saved.startedAt) return false;
+        current = saved;
+        rest = saved.rest && saved.rest.endsAt > Date.now() ? saved.rest : null;
+        primeCache();
+        return true;
+    }
+
+    function resume() {
+        if (!current) return;
+        openScreen();
+        render();
+        if (rest) startRestTicker();
+    }
+
+    function isActive() { return current !== null; }
+    function startedAt() { return current ? current.startedAt : 0; }
+
+    function primeCache() {
+        bestCache = {};
+        if (!current) return;
+        current.exercises.forEach(ex => {
+            if (!bestCache[ex.exerciseId]) bestCache[ex.exerciseId] = Stats.bestBefore(ex.exerciseId, current.date);
+        });
+    }
+
+    function persist() {
+        if (!current) { Store.clearActiveWorkout(); return; }
+        Store.saveActiveWorkout({ ...current, rest });
+    }
+
+    function openScreen() {
+        UI.openScreen('screen-workout');
+        startTicker();
+        UI.bindScrollShadow(body(), null);
+    }
+
+    function minimize() {
+        UI.closeScreen('screen-workout');
+    }
+
+    // ------------------------------------------------------------
+    // Clock
+    // ------------------------------------------------------------
+    function startTicker() {
+        stopTicker();
+        tick();
+        tickTimer = setInterval(tick, 1000);
+    }
+
+    function stopTicker() {
+        if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+    }
+
+    function tick() {
+        if (!current) return;
+        const elapsed = Date.now() - current.startedAt;
+        const clock = document.getElementById('workout-clock');
+        if (clock) clock.textContent = Stats.fmtClock(elapsed);
+
+        const totals = Stats.workoutTotals(current);
+        const sub = document.getElementById('workout-subline');
+        if (sub) {
+            sub.textContent = `${Stats.fmtVolume(totals.volume)} ${Store.unit()} · ${totals.sets} ${totals.sets === 1 ? 'set' : 'sets'}`;
+        }
+        const mini = document.getElementById('mini-workout-time');
+        if (mini) mini.textContent = Stats.fmtClock(elapsed);
+        tickRest();
+    }
+
+    // ------------------------------------------------------------
+    // Mutations
+    // ------------------------------------------------------------
+    function addExerciseObject(exerciseId, overrides = {}) {
+        const meta = Store.exercise(exerciseId);
+        const last = Stats.lastSession(exerciseId, current.date);
+
+        let sets = overrides.sets;
+        if (!sets) {
+            // Reproduce the last session so logging is mostly tapping the checkmark
+            if (last && last.sets.length) {
+                sets = last.sets.slice(0, 8).map(s => ({
+                    weight: Stats.setWeight(s) || '',
+                    reps: s.reps !== undefined && s.reps !== '' ? Number(s.reps) : '',
+                    repsL: s.repsL !== undefined && s.repsL !== '' ? Number(s.repsL) : '',
+                    repsR: s.repsR !== undefined && s.repsR !== '' ? Number(s.repsR) : '',
+                    type: s.type === 'warmup' ? 'warmup' : 'normal',
+                    completed: false,
                 }));
+            } else {
+                // Bodyweight movements start at your last logged body weight so
+                // that pull-ups and dips contribute a realistic load.
+                const log = Store.bodyLog();
+                const startWeight = meta && meta.category === 'Bodyweight' && log.length
+                    ? Math.round(log[log.length - 1].weight * 10) / 10
+                    : '';
+                sets = [{ weight: startWeight, reps: '', repsL: '', repsR: '', type: 'normal', completed: false }];
             }
         }
 
-        showWorkoutView();
-        startDurationTimer();
-        renderWorkout();
-    }
-
-    // ---------- Show/Hide Workout View ----------
-    function showWorkoutView() {
-        document.getElementById('view-workout').classList.add('active');
-        document.getElementById('bottom-nav').style.display = 'none';
-    }
-
-    function hideWorkoutView() {
-        document.getElementById('view-workout').classList.remove('active');
-        document.getElementById('bottom-nav').style.display = 'flex';
-    }
-
-    // ---------- Duration Timer ----------
-    function startDurationTimer() {
-        updateDurationDisplay();
-        durationInterval = setInterval(updateDurationDisplay, 1000);
-    }
-
-    function updateDurationDisplay() {
-        if (!workoutStartTime) return;
-        const elapsed = Date.now() - workoutStartTime;
-        document.getElementById('workout-duration').textContent =
-            GymData.formatDurationShort(elapsed);
-    }
-
-    function stopDurationTimer() {
-        if (durationInterval) {
-            clearInterval(durationInterval);
-            durationInterval = null;
-        }
-    }
-
-    // ---------- Add Exercise ----------
-    function addExercise(exerciseId) {
-        if (!currentWorkout) return;
-        const exercise = GymData.getExerciseById(exerciseId);
-        const isUnilateral = exercise ? !!exercise.isUnilateral : false;
-        currentWorkout.exercises.push({
+        current.exercises.push({
             exerciseId,
-            isUnilateral,
-            notes: '',
-            sets: [{ weight: '', reps: '', repsL: '', repsR: '', completed: false }],
+            isUnilateral: overrides.isUnilateral !== undefined
+                ? overrides.isUnilateral
+                : (meta ? !!meta.isUnilateral : false),
+            restSeconds: overrides.restSeconds || null,
+            notes: overrides.notes || '',
+            showNote: !!overrides.notes,
+            sets,
         });
-        renderWorkout();
+
+        if (!bestCache[exerciseId]) bestCache[exerciseId] = Stats.bestBefore(exerciseId, current.date);
     }
 
-    // ---------- Remove Exercise ----------
-    function removeExercise(exIndex) {
-        if (!currentWorkout) return;
-        currentWorkout.exercises.splice(exIndex, 1);
-        renderWorkout();
+    function addExercises(ids) {
+        if (!current) return;
+        ids.forEach(id => addExerciseObject(id));
+        persist();
+        render();
+        const nodes = body().querySelectorAll('.wex');
+        if (nodes.length) nodes[nodes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    // ---------- Add Set ----------
-    function addSet(exIndex) {
-        if (!currentWorkout) return;
-        const sets = currentWorkout.exercises[exIndex].sets;
-        // Copy weight/reps from last set as suggestion
-        const lastSet = sets[sets.length - 1];
-        sets.push({
-            weight: lastSet ? lastSet.weight : '',
-            reps: lastSet ? lastSet.reps : '',
-            repsL: lastSet ? lastSet.repsL : '',
-            repsR: lastSet ? lastSet.repsR : '',
+    function removeExercise(i) {
+        current.exercises.splice(i, 1);
+        persist();
+        render();
+    }
+
+    function moveExercise(i, dir) {
+        const j = i + dir;
+        if (j < 0 || j >= current.exercises.length) return;
+        const [item] = current.exercises.splice(i, 1);
+        current.exercises.splice(j, 0, item);
+        persist();
+        render();
+    }
+
+    function addSet(i) {
+        const ex = current.exercises[i];
+        const last = ex.sets[ex.sets.length - 1];
+        ex.sets.push({
+            weight: last ? last.weight : '',
+            reps: last ? last.reps : '',
+            repsL: last ? last.repsL : '',
+            repsR: last ? last.repsR : '',
+            type: 'normal',
             completed: false,
         });
-        renderWorkout();
+        persist();
+        render();
     }
 
-    // ---------- Remove Set ----------
-    function removeSet(exIndex, setIndex) {
-        if (!currentWorkout) return;
-        currentWorkout.exercises[exIndex].sets.splice(setIndex, 1);
-        renderWorkout();
+    function removeSet(i, j) {
+        current.exercises[i].sets.splice(j, 1);
+        if (current.exercises[i].sets.length === 0) current.exercises.splice(i, 1);
+        persist();
+        render();
     }
 
-    // ---------- Update Set Data ----------
-    function updateSetData(exIndex, setIndex, field, value) {
-        if (!currentWorkout) return;
-        currentWorkout.exercises[exIndex].sets[setIndex][field] = value;
-    }
-
-    // ---------- Toggle Set Complete ----------
-    function toggleSetComplete(exIndex, setIndex) {
-        if (!currentWorkout) return;
-        const set = currentWorkout.exercises[exIndex].sets[setIndex];
+    function toggleSet(i, j) {
+        const ex = current.exercises[i];
+        const set = ex.sets[j];
         set.completed = !set.completed;
-        renderWorkout();
 
-        // Auto-open timer when set is completed
         if (set.completed) {
-            Timer.openTimerModal();
+            if (set.weight === '') set.weight = 0;   // bodyweight work logs as zero load
+            UI.haptic(14);
+            checkRecord(ex, set);
+            if (Store.settings().restAuto && set.type !== 'warmup') startRest(ex.restSeconds || Store.settings().restDefault);
         }
+
+        persist();
+        // targeted update keeps scroll position and the keyboard state intact
+        const row = body().querySelector(`.set-row[data-ex="${i}"][data-set="${j}"]`);
+        if (row) {
+            row.classList.toggle('is-done', set.completed);
+            const check = row.querySelector('.set-check');
+            if (check) check.classList.toggle('is-done', set.completed);
+        }
+        updateExerciseMeta(i);
+        tick();
     }
 
-    // ---------- Update Notes ----------
-    function updateNotes(exIndex, notes) {
-        if (!currentWorkout) return;
-        currentWorkout.exercises[exIndex].notes = notes;
+    function setField(i, j, field, value) {
+        const set = current.exercises[i].sets[j];
+        if (field === 'weight') {
+            set.weight = value === '' ? '' : Store.toBase(UI.num(value));
+        } else {
+            set.reps = field === 'reps' ? (value === '' ? '' : Math.round(UI.num(value))) : set.reps;
+            set.repsL = field === 'repsL' ? (value === '' ? '' : Math.round(UI.num(value))) : set.repsL;
+            set.repsR = field === 'repsR' ? (value === '' ? '' : Math.round(UI.num(value))) : set.repsR;
+        }
+        persist();
+        updateExerciseMeta(i);
     }
 
-    // ---------- Finish Workout ----------
-    function finishWorkout() {
-        if (!currentWorkout) return;
+    function checkRecord(ex, set) {
+        const best = bestCache[ex.exerciseId] || { e1rm: 0, weight: 0 };
+        const e = Stats.setE1rm(set);
+        const w = Stats.setWeight(set);
+        if (set.type === 'warmup' || (e <= 0 && w <= 0)) return;
 
-        // Check if there are any completed sets
-        const hasCompletedSets = currentWorkout.exercises.some(
-            ex => ex.sets.some(s => s.completed)
-        );
+        if (e > best.e1rm + 0.01 && best.e1rm > 0) {
+            UI.toast({
+                title: 'Personal record',
+                sub: `${Store.exerciseName(ex.exerciseId)} · est. 1RM ${Stats.fmtWeight(e, { decimals: 1 })} ${Store.unit()}`,
+                tone: 'record',
+                duration: 3200,
+            });
+            UI.haptic([12, 60, 12]);
+        } else if (w > best.weight + 0.01 && best.weight > 0) {
+            UI.toast({
+                title: 'Heaviest set yet',
+                sub: `${Store.exerciseName(ex.exerciseId)} · ${Stats.fmtWeight(w)} ${Store.unit()}`,
+                tone: 'record',
+                duration: 3200,
+            });
+            UI.haptic([12, 60, 12]);
+        }
+        best.e1rm = Math.max(best.e1rm, e);
+        best.weight = Math.max(best.weight, w);
+        bestCache[ex.exerciseId] = best;
+    }
 
-        if (!hasCompletedSets) {
-            App.showConfirm(
-                'No Completed Sets',
-                'You haven\'t completed any sets. Discard this workout?',
-                () => {
-                    cancelWorkout();
-                }
-            );
+    // ------------------------------------------------------------
+    // Rest timer
+    // ------------------------------------------------------------
+    let restTimer = null;
+
+    function startRest(seconds) {
+        rest = { endsAt: Date.now() + seconds * 1000, total: seconds };
+        persist();
+        renderRest();
+        startRestTicker();
+    }
+
+    function startRestTicker() {
+        if (restTimer) clearInterval(restTimer);
+        renderRest();
+        restTimer = setInterval(tickRest, 250);
+    }
+
+    function stopRest(silent = false) {
+        rest = null;
+        if (restTimer) { clearInterval(restTimer); restTimer = null; }
+        const bar = document.getElementById('rest-bar');
+        if (bar) bar.hidden = true;
+        persist();
+        if (!silent) UI.haptic(8);
+    }
+
+    function adjustRest(delta) {
+        if (!rest) return;
+        rest.endsAt += delta * 1000;
+        rest.total = Math.max(5, rest.total + delta);
+        if (rest.endsAt <= Date.now()) { stopRest(); return; }
+        persist();
+        tickRest();
+        UI.haptic(8);
+    }
+
+    function renderRest() {
+        const bar = document.getElementById('rest-bar');
+        if (!bar) return;
+        bar.hidden = !rest;
+        tickRest();
+    }
+
+    function tickRest() {
+        if (!rest) return;
+        const left = rest.endsAt - Date.now();
+        const bar = document.getElementById('rest-bar');
+        if (!bar) return;
+
+        if (left <= 0) {
+            const label = document.getElementById('rest-time');
+            if (label) label.textContent = '0:00';
+            UI.beep(2);
+            UI.haptic([180, 90, 180]);
+            UI.toast({ title: 'Rest complete', sub: 'Next set is up.', tone: 'success', duration: 2200 });
+            stopRest(true);
             return;
         }
 
-        const duration = Date.now() - workoutStartTime;
-        const workout = {
-            ...currentWorkout,
-            endTime: new Date().toISOString(),
-            duration,
-        };
-
-        // Only save exercises that have at least one completed set
-        workout.exercises = workout.exercises.filter(
-            ex => ex.sets.some(s => s.completed)
-        );
-
-        GymData.saveWorkout(workout);
-
-        stopDurationTimer();
-        currentWorkout = null;
-        workoutStartTime = null;
-        hideWorkoutView();
-
-        // Refresh dashboard
-        App.refreshDashboard();
-        App.showView('view-dashboard');
+        bar.hidden = false;
+        const label = document.getElementById('rest-time');
+        if (label) label.textContent = Stats.fmtClock(left + 999);
+        const progress = document.getElementById('rest-progress');
+        if (progress) progress.style.width = `${Math.max(0, Math.min(100, (left / (rest.total * 1000)) * 100))}%`;
     }
 
-    // ---------- Cancel Workout ----------
-    function cancelWorkout() {
-        stopDurationTimer();
-        currentWorkout = null;
-        workoutStartTime = null;
-        hideWorkoutView();
+    // ------------------------------------------------------------
+    // Rendering
+    // ------------------------------------------------------------
+    function fmtInput(kg) {
+        if (kg === '' || kg === null || kg === undefined) return '';
+        const v = Store.toDisplay(kg);
+        return String(Math.round(v * 100) / 100);
     }
 
-    // ---------- Render Workout ----------
-    function renderWorkout() {
-        const container = document.getElementById('workout-exercise-list');
-        if (!currentWorkout) {
-            container.innerHTML = '';
-            return;
+    function prevText(set) {
+        if (!set) return '';
+        const w = Stats.fmtWeight(Stats.setWeight(set));
+        if (Stats.isUnilateralSet(set)) {
+            return `${w} × ${set.repsL || 0}/${set.repsR || 0}`;
+        }
+        return `${w} × ${set.reps || 0}`;
+    }
+
+    function setTagLabel(set, workingNumber) {
+        if (set.type === 'warmup') return 'W';
+        if (set.type === 'drop') return 'D';
+        if (set.type === 'failure') return 'F';
+        return String(workingNumber);
+    }
+
+    /**
+     * Pairs today's sets with the matching sets of the last session:
+     * warm-ups line up with warm-ups, working sets with working sets.
+     */
+    function previousFor(sets, lastSession) {
+        if (!lastSession) return sets.map(() => null);
+        const warm = lastSession.sets.filter(s => s.type === 'warmup');
+        const work = lastSession.sets.filter(s => s.type !== 'warmup');
+        let wi = 0, ki = 0;
+        return sets.map(s => (s.type === 'warmup' ? warm[wi++] : work[ki++]) || null);
+    }
+
+    function exerciseMetaText(ex) {
+        const done = ex.sets.filter(s => s.completed).length;
+        const volume = ex.sets.filter(Stats.isWorkingSet).reduce((sum, s) => sum + Stats.setVolume(s), 0);
+        const restLabel = ex.restSeconds ? ` · rest ${Stats.fmtClock(ex.restSeconds * 1000)}` : '';
+        return `${done}/${ex.sets.length} sets · ${Stats.fmtVolume(volume)} ${Store.unit()}${restLabel}`;
+    }
+
+    function updateExerciseMeta(i) {
+        const node = body().querySelector(`.wex[data-ex="${i}"] .wex-meta`);
+        if (node) node.textContent = exerciseMetaText(current.exercises[i]);
+    }
+
+    function render() {
+        if (!current) { body().innerHTML = ''; return; }
+
+        const parts = [];
+
+        if (current.exercises.length === 0) {
+            parts.push(`
+                <div class="empty" style="padding-top:60px">
+                    <strong>Empty workout</strong>
+                    Add your first exercise to start logging sets.
+                </div>`);
         }
 
-        if (currentWorkout.exercises.length === 0) {
-            container.innerHTML = '<p class="empty-state" style="margin-top:60px;">Tap "Add Exercise" to get started!</p>';
-            return;
-        }
+        current.exercises.forEach((ex, i) => {
+            const meta = Store.exercise(ex.exerciseId);
+            const name = meta ? meta.name : 'Unknown exercise';
+            const uni = !!ex.isUnilateral;
+            const last = Stats.lastSession(ex.exerciseId, current.date);
 
-        container.innerHTML = currentWorkout.exercises.map((ex, exIndex) => {
-            const exercise = GymData.getExerciseById(ex.exerciseId);
-            const name = exercise ? exercise.name : 'Unknown Exercise';
-            const isUnilateral = ex.isUnilateral !== undefined ? ex.isUnilateral : (exercise ? !!exercise.isUnilateral : false);
+            const head = `
+                <div class="wex-head">
+                    <div class="wex-title" data-act="exercise-info" data-ex="${i}">
+                        <div class="wex-name">${UI.esc(name)}${uni ? '<span class="badge badge-lr">L/R</span>' : ''}</div>
+                        <div class="wex-meta">${UI.esc(exerciseMetaText(ex))}</div>
+                    </div>
+                    <button class="icon-btn" data-act="exercise-menu" data-ex="${i}" aria-label="Exercise options">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                    </button>
+                </div>`;
 
-            const setsHtml = ex.sets.map((set, setIndex) => {
-                if (isUnilateral) {
-                    return `
-                        <tr class="${set.completed ? 'set-completed' : ''}">
-                            <td><span class="set-number">${setIndex + 1}</span></td>
-                            <td>
-                                <input type="number" class="set-input" value="${set.weight || ''}"
-                                    placeholder="0" inputmode="decimal"
-                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
-                            </td>
-                            <td>
-                                <input type="number" class="set-input set-input-lr" value="${set.repsL || ''}"
-                                    placeholder="L" inputmode="numeric"
-                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="repsL">
-                            </td>
-                            <td>
-                                <input type="number" class="set-input set-input-lr" value="${set.repsR || ''}"
-                                    placeholder="R" inputmode="numeric"
-                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="repsR">
-                            </td>
-                            <td>
-                                <button class="set-check-btn ${set.completed ? 'checked' : ''}"
-                                    data-ex="${exIndex}" data-set="${setIndex}" data-action="toggle-set">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="3">
-                                        <polyline points="20 6 9 17 4 12"/>
-                                    </svg>
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                } else {
-                    return `
-                        <tr class="${set.completed ? 'set-completed' : ''}">
-                            <td><span class="set-number">${setIndex + 1}</span></td>
-                            <td>
-                                <input type="number" class="set-input" value="${set.weight || ''}"
-                                    placeholder="0" inputmode="decimal"
-                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
-                            </td>
-                            <td>
-                                <input type="number" class="set-input" value="${set.reps || ''}"
-                                    placeholder="0" inputmode="numeric"
-                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="reps">
-                            </td>
-                            <td>
-                                <button class="set-check-btn ${set.completed ? 'checked' : ''}"
-                                    data-ex="${exIndex}" data-set="${setIndex}" data-action="toggle-set">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="3">
-                                        <polyline points="20 6 9 17 4 12"/>
-                                    </svg>
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                }
+            const note = ex.showNote || ex.notes ? `
+                <div class="wex-note">
+                    <textarea rows="1" placeholder="Notes, cues, machine settings"
+                        data-act="note" data-ex="${i}">${UI.esc(ex.notes || '')}</textarea>
+                </div>` : '';
+
+            const gridClass = uni ? 'set-grid-2' : 'set-grid-1';
+            const header = uni
+                ? `<div class="set-head ${gridClass}"><span>Set</span><span>Previous</span><span>${Store.unit()}</span><span>L</span><span>R</span><span></span></div>`
+                : `<div class="set-head ${gridClass}"><span>Set</span><span>Previous</span><span>${Store.unit()}</span><span>Reps</span><span></span></div>`;
+
+            const prevSets = previousFor(ex.sets, last);
+            let workingNumber = 0;
+
+            const rows = ex.sets.map((set, j) => {
+                if (set.type !== 'warmup') workingNumber++;
+                const prev = prevSets[j] ? prevText(prevSets[j]) : '';
+                const tag = setTagLabel(set, workingNumber);
+                const tagClass = set.type === 'warmup' ? 'tag-warmup' : set.type === 'drop' ? 'tag-drop' : set.type === 'failure' ? 'tag-fail' : '';
+                const inputs = uni
+                    ? `<input class="set-input" inputmode="numeric" data-field="repsL" data-ex="${i}" data-set="${j}" value="${set.repsL === '' || set.repsL === undefined ? '' : set.repsL}" placeholder="0">
+                       <input class="set-input" inputmode="numeric" data-field="repsR" data-ex="${i}" data-set="${j}" value="${set.repsR === '' || set.repsR === undefined ? '' : set.repsR}" placeholder="0">`
+                    : `<input class="set-input" inputmode="numeric" data-field="reps" data-ex="${i}" data-set="${j}" value="${set.reps === '' || set.reps === undefined ? '' : set.reps}" placeholder="0">`;
+
+                return `
+                    <div class="set-row ${gridClass} ${set.completed ? 'is-done' : ''}" data-ex="${i}" data-set="${j}">
+                        <button class="set-tag ${tagClass}" data-act="set-menu" data-ex="${i}" data-set="${j}">${tag}</button>
+                        <button class="set-prev ${prev ? 'is-tappable' : ''}" data-act="use-prev" data-ex="${i}" data-set="${j}">${prev || '—'}</button>
+                        <input class="set-input" inputmode="decimal" data-field="weight" data-ex="${i}" data-set="${j}" value="${fmtInput(set.weight)}" placeholder="0">
+                        ${inputs}
+                        <button class="set-check ${set.completed ? 'is-done' : ''}" data-act="toggle" data-ex="${i}" data-set="${j}" aria-label="Complete set">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </button>
+                    </div>`;
             }).join('');
 
-            return `
-                <div class="workout-exercise-block">
-                    <div class="workout-exercise-header">
-                        <div class="header-left-title">
-                            <h3>${name}</h3>
-                            <button class="btn-toggle-unilateral ${isUnilateral ? 'active' : ''}"
-                                data-action="toggle-unilateral" data-ex="${exIndex}"
-                                title="Toggle Left/Right tracking">
-                                L/R
-                            </button>
+            parts.push(`
+                <div class="wex" data-ex="${i}">
+                    ${head}
+                    ${note}
+                    ${header}
+                    ${rows}
+                    <div class="wex-foot">
+                        <button class="btn btn-sm btn-add" data-act="add-set" data-ex="${i}">Add Set</button>
+                        ${meta && meta.isBarbell ? `<button class="btn btn-sm" data-act="plates" data-ex="${i}">Plates</button>` : ''}
+                        <button class="btn btn-sm" data-act="rest-now" data-ex="${i}">Rest</button>
+                    </div>
+                </div>`);
+        });
+
+        parts.push(`
+            <button class="btn btn-tint btn-block" data-act="add-exercise">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Exercise
+            </button>`);
+
+        if (current.exercises.length > 0) {
+            parts.push(`<button class="btn btn-danger btn-block" data-act="discard">Discard Workout</button>`);
+        }
+
+        body().innerHTML = parts.join('');
+        autoSizeNotes();
+    }
+
+    function autoSizeNotes() {
+        body().querySelectorAll('textarea[data-act="note"]').forEach(t => {
+            t.style.height = 'auto';
+            t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+        });
+    }
+
+    // ------------------------------------------------------------
+    // Menus
+    // ------------------------------------------------------------
+    function openExerciseMenu(i) {
+        const ex = current.exercises[i];
+        const meta = Store.exercise(ex.exerciseId);
+        UI.actionSheet({
+            title: meta ? meta.name : 'Exercise',
+            actions: [
+                { label: ex.showNote || ex.notes ? 'Hide Note' : 'Add Note', plain: true, onSelect: () => {
+                    ex.showNote = !(ex.showNote || ex.notes);
+                    if (!ex.showNote) ex.notes = '';
+                    persist(); render();
+                } },
+                { label: `Rest Timer${ex.restSeconds ? ` (${Stats.fmtClock(ex.restSeconds * 1000)})` : ''}`, plain: true, onSelect: () => openRestPicker(i) },
+                { label: ex.isUnilateral ? 'Track Both Sides Together' : 'Track Left / Right Separately', plain: true, onSelect: () => {
+                    ex.isUnilateral = !ex.isUnilateral;
+                    persist(); render();
+                } },
+                { label: 'Exercise History', plain: true, onSelect: () => Exercises.openDetail(ex.exerciseId) },
+                { label: 'Move Up', plain: true, onSelect: () => moveExercise(i, -1) },
+                { label: 'Move Down', plain: true, onSelect: () => moveExercise(i, 1) },
+                { label: 'Remove Exercise', destructive: true, onSelect: async () => {
+                    const ok = await UI.confirm({
+                        title: 'Remove exercise?',
+                        message: 'Logged sets for this exercise are discarded.',
+                        confirmLabel: 'Remove', destructive: true,
+                    });
+                    if (ok) removeExercise(i);
+                } },
+            ],
+        });
+    }
+
+    function openSetMenu(i, j) {
+        const set = current.exercises[i].sets[j];
+        const setType = (type) => { set.type = type; persist(); render(); };
+        UI.actionSheet({
+            title: `Set ${j + 1}`,
+            message: 'Warm-up sets are excluded from volume and records.',
+            actions: [
+                { label: 'Normal Set', plain: set.type !== 'normal', onSelect: () => setType('normal') },
+                { label: 'Warm-up Set', plain: set.type !== 'warmup', onSelect: () => setType('warmup') },
+                { label: 'Drop Set', plain: set.type !== 'drop', onSelect: () => setType('drop') },
+                { label: 'To Failure', plain: set.type !== 'failure', onSelect: () => setType('failure') },
+                { label: 'Delete Set', destructive: true, onSelect: () => removeSet(i, j) },
+            ],
+        });
+    }
+
+    function openRestPicker(i) {
+        const ex = current.exercises[i];
+        const options = [0, 45, 60, 90, 120, 150, 180, 240];
+        UI.actionSheet({
+            title: 'Rest between sets',
+            message: 'Applies to this exercise in this workout.',
+            actions: options.map(sec => ({
+                label: sec === 0 ? 'Use default' : Stats.fmtClock(sec * 1000),
+                plain: true,
+                onSelect: () => {
+                    ex.restSeconds = sec || null;
+                    persist();
+                    updateExerciseMeta(i);
+                },
+            })),
+        });
+    }
+
+    // ------------------------------------------------------------
+    // Plate calculator
+    // ------------------------------------------------------------
+    function openPlates(i) {
+        const ex = current.exercises[i];
+        const lastSet = [...ex.sets].reverse().find(s => Stats.setWeight(s) > 0);
+        const target = lastSet ? Stats.setWeight(lastSet) : 60;
+        const bar = Store.settings().barWeight;
+
+        const plates = Store.unit() === 'lb'
+            ? [45, 35, 25, 10, 5, 2.5].map(lb => lb / Store.LB_PER_KG)
+            : [25, 20, 15, 10, 5, 2.5, 1.25];
+
+        const colors = ['#FF453A', '#0A84FF', '#FFD60A', '#30D158', '#FFFFFF', '#8E8E93', '#BF5AF2'];
+
+        let remaining = (target - bar) / 2;
+        const used = [];
+        if (remaining > 0) {
+            plates.forEach((p, idx) => {
+                let count = Math.floor((remaining + 0.001) / p);
+                if (count > 0) {
+                    used.push({ plate: p, count, color: colors[idx % colors.length] });
+                    remaining -= count * p;
+                }
+            });
+        }
+
+        const rest = Math.max(0, remaining);
+
+        UI.sheet({
+            title: 'Plate Calculator',
+            left: 'Done',
+            build: (el) => {
+                el.innerHTML = `
+                    <div class="card center">
+                        <div class="tile-label">Target weight</div>
+                        <div class="metric-big">${Stats.fmtWeight(target)}<span class="unit"> ${Store.unit()}</span></div>
+                        <div class="tiny muted mt-4">Bar ${Stats.fmtWeight(bar)} ${Store.unit()} &middot; per side</div>
+                        <div class="plates mt-8">
+                            ${used.length === 0
+                                ? '<div class="tiny muted">Bar only.</div>'
+                                : used.map(u => `
+                                    <div class="plate" style="background:${u.color}${u.color === '#FFFFFF' ? '' : 'DD'};color:${u.color === '#FFFFFF' ? '#000' : '#fff'}">
+                                        ${Stats.fmtWeight(u.plate, { decimals: u.plate % 1 === 0 ? 0 : 2 })}
+                                        <small>&times;${u.count}</small>
+                                    </div>`).join('')}
                         </div>
-                        <button class="btn-icon danger" data-action="remove-exercise" data-ex="${exIndex}">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"/>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4
-                                    a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                        </button>
+                        ${rest > 0.01 ? `<div class="tiny muted mt-8">${Stats.fmtWeight(rest, { decimals: 2 })} ${Store.unit()} per side cannot be matched with standard plates.</div>` : ''}
                     </div>
-                    <div class="workout-exercise-notes">
-                        <textarea placeholder="Add notes... (e.g. wide grip, go slow)"
-                            data-ex="${exIndex}" data-action="update-notes"
-                            rows="1">${ex.notes || ''}</textarea>
-                    </div>
-                    <table class="set-table ${isUnilateral ? 'set-table-unilateral' : ''}">
-                        <thead>
-                            <tr>
-                                <th>Set</th>
-                                <th>kg</th>
-                                ${isUnilateral ? '<th>L Reps</th><th>R Reps</th>' : '<th>Reps</th>'}
-                                <th>✓</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${setsHtml}
-                        </tbody>
-                    </table>
-                    <div class="workout-exercise-footer">
-                        <button class="btn btn-ghost btn-small" data-action="add-set" data-ex="${exIndex}">
-                            + Add Set
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        // Attach event listeners
-        attachWorkoutListeners(container);
-    }
-
-    // ---------- Event Listeners ----------
-    function attachWorkoutListeners(container) {
-        // Toggle unilateral mode
-        container.querySelectorAll('[data-action="toggle-unilateral"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const exIndex = Number(e.currentTarget.dataset.ex);
-                const currentVal = currentWorkout.exercises[exIndex].isUnilateral;
-                const exercise = GymData.getExerciseById(currentWorkout.exercises[exIndex].exerciseId);
-                const defaultVal = exercise ? !!exercise.isUnilateral : false;
-                const activeVal = currentVal !== undefined ? currentVal : defaultVal;
-                currentWorkout.exercises[exIndex].isUnilateral = !activeVal;
-                renderWorkout();
-            });
-        });
-
-        // Set inputs
-        container.querySelectorAll('.set-input').forEach(input => {
-            input.addEventListener('input', (e) => {
-                const { ex, set, field } = e.target.dataset;
-                updateSetData(Number(ex), Number(set), field, e.target.value);
-            });
-        });
-
-        // Toggle set complete
-        container.querySelectorAll('[data-action="toggle-set"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const { ex, set } = e.currentTarget.dataset;
-                toggleSetComplete(Number(ex), Number(set));
-            });
-        });
-
-        // Add set
-        container.querySelectorAll('[data-action="add-set"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                addSet(Number(e.currentTarget.dataset.ex));
-            });
-        });
-
-        // Remove exercise
-        container.querySelectorAll('[data-action="remove-exercise"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const exIndex = Number(e.currentTarget.dataset.ex);
-                App.showConfirm('Remove Exercise', 'Remove this exercise from the workout?', () => {
-                    removeExercise(exIndex);
-                });
-            });
-        });
-
-        // Notes
-        container.querySelectorAll('[data-action="update-notes"]').forEach(textarea => {
-            textarea.addEventListener('input', (e) => {
-                updateNotes(Number(e.target.dataset.ex), e.target.value);
-                // Auto-resize
-                e.target.style.height = 'auto';
-                e.target.style.height = e.target.scrollHeight + 'px';
-            });
+                    <p class="tiny muted center">Bar weight can be changed in Settings.</p>`;
+            },
         });
     }
 
-    // ---------- Open Exercise Picker for Workout ----------
-    function openExercisePickerForWorkout() {
-        App.openExercisePicker((exerciseId) => {
-            addExercise(exerciseId);
+    // ------------------------------------------------------------
+    // Finish / discard
+    // ------------------------------------------------------------
+    async function finish() {
+        if (!current) return;
+
+        const completed = current.exercises.some(ex => ex.sets.some(s => s.completed));
+        if (!completed) {
+            const ok = await UI.confirm({
+                title: 'Nothing logged',
+                message: 'No sets were completed. Discard this workout?',
+                confirmLabel: 'Discard', destructive: true,
+            });
+            if (ok) discard(true);
+            return;
+        }
+
+        const unfinished = current.exercises.reduce(
+            (sum, ex) => sum + ex.sets.filter(s => !s.completed).length, 0);
+        if (unfinished > 0) {
+            const ok = await UI.confirm({
+                title: 'Finish workout?',
+                message: `${unfinished} set${unfinished === 1 ? '' : 's'} not completed. They will not be saved.`,
+                confirmLabel: 'Finish',
+            });
+            if (!ok) return;
+        }
+
+        const duration = Date.now() - current.startedAt;
+        const workout = {
+            id: current.id,
+            date: current.date,
+            endTime: new Date().toISOString(),
+            duration,
+            name: current.name || '',
+            routineId: current.routineId || null,
+            exercises: current.exercises
+                .map(ex => ({
+                    exerciseId: ex.exerciseId,
+                    isUnilateral: !!ex.isUnilateral,
+                    notes: ex.notes || '',
+                    sets: ex.sets.filter(s => s.completed).map(s => ({
+                        weight: s.weight === '' ? 0 : Number(s.weight),
+                        reps: s.reps === '' ? undefined : Number(s.reps),
+                        repsL: s.repsL === '' ? undefined : Number(s.repsL),
+                        repsR: s.repsR === '' ? undefined : Number(s.repsR),
+                        type: s.type || 'normal',
+                        completed: true,
+                    })),
+                }))
+                .filter(ex => ex.sets.length > 0),
+        };
+
+        Store.saveWorkout(workout);
+        const records = Stats.workoutRecords(workout);
+
+        stopRest(true);
+        stopTicker();
+        const wasEmptyStart = !current.routineId;
+        current = null;
+        Store.clearActiveWorkout();
+        UI.closeScreen('screen-workout');
+        App.refreshAll();
+
+        setTimeout(() => showSummary(workout, records, wasEmptyStart), 380);
+    }
+
+    function showSummary(workout, records, offerRoutine) {
+        const t = Stats.workoutTotals(workout);
+        const ringsNow = Stats.rings();
+
+        UI.sheet({
+            title: 'Workout Complete',
+            left: 'Done',
+            build: (el) => {
+                el.innerHTML = `
+                    <div class="card rings-card">
+                        <div class="rings-figure">${Charts.rings([ringsNow.volume.pct, ringsNow.workouts.pct, ringsNow.sets.pct], { size: 112, stroke: 11 })}</div>
+                        <div class="rings-legend">
+                            <div class="legend-item">
+                                <div class="legend-label">This session</div>
+                                <div class="legend-value lc-1">${Stats.fmtVolume(t.volume)}<span class="unit"> ${Store.unit()}</span></div>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-label">Duration</div>
+                                <div class="legend-value lc-2">${Stats.fmtDuration(workout.duration)}</div>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-label">Sets</div>
+                                <div class="legend-value lc-3">${t.sets}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${records.length ? `
+                    <div class="card">
+                        <div class="card-head"><h3>New Records</h3><span class="card-sub">${records.length}</span></div>
+                        ${records.map(r => `
+                            <div class="detail-set">
+                                <div class="detail-set-n" style="background:rgba(255,214,10,0.18);color:#FFD60A">PR</div>
+                                <div class="grow">
+                                    <div style="font-size:.9375rem">${UI.esc(Store.exerciseName(r.exerciseId))}</div>
+                                    <div class="tiny muted">${r.type === 'e1rm' ? 'Estimated 1RM' : 'Heaviest set'} &middot; ${Stats.fmtWeight(r.value, { decimals: 1 })} ${Store.unit()}${r.previous > 0 ? ` (was ${Stats.fmtWeight(r.previous, { decimals: 1 })})` : ''}</div>
+                                </div>
+                            </div>`).join('')}
+                    </div>` : ''}
+
+                    <div class="card">
+                        <div class="card-head"><h3>Exercises</h3></div>
+                        ${workout.exercises.map(ex => {
+                            const vol = ex.sets.filter(Stats.isWorkingSet).reduce((s, x) => s + Stats.setVolume(x), 0);
+                            return `<div class="list-row" style="padding-left:0;padding-right:0">
+                                <div class="list-row-main">
+                                    <div class="list-row-title">${UI.esc(Store.exerciseName(ex.exerciseId))}</div>
+                                    <div class="list-row-sub">${ex.sets.length} ${ex.sets.length === 1 ? 'set' : 'sets'} &middot; ${Stats.fmtVolume(vol)} ${Store.unit()}</div>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                        ${offerRoutine ? '<button class="btn btn-grey btn-block" data-act="save-routine">Save as Routine</button>' : ''}
+                        ${Store.settings().healthShortcut ? '<button class="btn btn-grey btn-block" data-act="health">Send to Apple Health</button>' : ''}
+                    </div>`;
+
+                const routineBtn = el.querySelector('[data-act="save-routine"]');
+                if (routineBtn) {
+                    routineBtn.addEventListener('click', async () => {
+                        const name = await UI.prompt({
+                            title: 'Save as Routine',
+                            message: 'Reuse this session as a template.',
+                            value: Stats.workoutTitle(workout),
+                            placeholder: 'Routine name',
+                        });
+                        if (name === null || !name.trim()) return;
+                        Routines.createFromWorkout(workout, name.trim());
+                        routineBtn.textContent = 'Routine Saved';
+                        routineBtn.disabled = true;
+                        UI.toast({ title: 'Routine saved', tone: 'success' });
+                        App.refreshAll();
+                    });
+                }
+
+                const healthBtn = el.querySelector('[data-act="health"]');
+                if (healthBtn) healthBtn.addEventListener('click', () => Settings.sendToHealth(workout));
+            },
         });
     }
 
-    function isActive() {
-        return currentWorkout !== null;
+    async function discard(skipConfirm = false) {
+        if (!skipConfirm) {
+            const ok = await UI.confirm({
+                title: 'Discard workout?',
+                message: 'Everything logged in this session will be lost.',
+                confirmLabel: 'Discard', destructive: true,
+            });
+            if (!ok) return;
+        }
+        stopRest(true);
+        stopTicker();
+        current = null;
+        Store.clearActiveWorkout();
+        UI.closeScreen('screen-workout');
+        App.refreshAll();
+    }
+
+    // ------------------------------------------------------------
+    // Events
+    // ------------------------------------------------------------
+    function bind() {
+        const container = body();
+
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-act]');
+            if (!btn) return;
+            const i = Number(btn.dataset.ex);
+            const j = Number(btn.dataset.set);
+
+            switch (btn.dataset.act) {
+                case 'toggle': toggleSet(i, j); break;
+                case 'add-set': addSet(i); break;
+                case 'set-menu': openSetMenu(i, j); break;
+                case 'exercise-menu': openExerciseMenu(i); break;
+                case 'exercise-info': Exercises.openDetail(current.exercises[i].exerciseId); break;
+                case 'plates': openPlates(i); break;
+                case 'rest-now': startRest(current.exercises[i].restSeconds || Store.settings().restDefault); break;
+                case 'add-exercise': Picker.open({ onPick: addExercises }); break;
+                case 'discard': discard(); break;
+                case 'use-prev': {
+                    const ex = current.exercises[i];
+                    const last = Stats.lastSession(ex.exerciseId, current.date);
+                    const prev = previousFor(ex.sets, last)[j];
+                    if (!prev) return;
+                    const set = ex.sets[j];
+                    set.weight = Stats.setWeight(prev);
+                    if (ex.isUnilateral) {
+                        set.repsL = prev.repsL !== undefined ? Number(prev.repsL) : Number(prev.reps) || '';
+                        set.repsR = prev.repsR !== undefined ? Number(prev.repsR) : Number(prev.reps) || '';
+                    } else {
+                        set.reps = Stats.setReps(prev);
+                    }
+                    persist();
+                    render();
+                    UI.haptic(8);
+                    break;
+                }
+            }
+        });
+
+        container.addEventListener('input', (e) => {
+            const input = e.target;
+            if (input.classList.contains('set-input')) {
+                setField(Number(input.dataset.ex), Number(input.dataset.set), input.dataset.field, input.value);
+            } else if (input.dataset.act === 'note') {
+                current.exercises[Number(input.dataset.ex)].notes = input.value;
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+                persist();
+            }
+        });
+
+        // Keyboard "next" moves through the set inputs
+        container.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' || !e.target.classList.contains('set-input')) return;
+            e.preventDefault();
+            const inputs = [...container.querySelectorAll('.set-input')];
+            const idx = inputs.indexOf(e.target);
+            if (idx >= 0 && idx < inputs.length - 1) inputs[idx + 1].focus();
+            else e.target.blur();
+        });
+
+        document.getElementById('btn-workout-finish').addEventListener('click', finish);
+        document.getElementById('btn-workout-cancel').addEventListener('click', () => {
+            UI.actionSheet({
+                title: 'Workout',
+                actions: [
+                    { label: 'Minimize', plain: true, onSelect: minimize },
+                    { label: 'Discard Workout', destructive: true, onSelect: () => discard() },
+                ],
+            });
+        });
+
+        document.getElementById('btn-rest-skip').addEventListener('click', () => stopRest());
+        document.querySelectorAll('[data-rest-adjust]').forEach(btn => {
+            btn.addEventListener('click', () => adjustRest(Number(btn.dataset.restAdjust)));
+        });
     }
 
     return {
-        startWorkout,
-        addExercise,
-        finishWorkout,
-        cancelWorkout,
-        openExercisePickerForWorkout,
-        renderWorkout,
-        isActive,
+        start, restore, resume, isActive, startedAt, bind, render, tick,
+        minimize, finish, discard, addExercises,
     };
 })();
