@@ -148,37 +148,80 @@ const Templates = (() => {
         container.innerHTML = currentTemplate.exercises.map((ex, exIndex) => {
             const exercise = GymData.getExerciseById(ex.exerciseId);
             const name = exercise ? exercise.name : 'Unknown';
+            const isUnilateral = ex.isUnilateral !== undefined ? ex.isUnilateral : (exercise ? !!exercise.isUnilateral : false);
 
-            const setsHtml = ex.sets.map((set, setIndex) => `
-                <tr>
-                    <td><span class="set-number">${setIndex + 1}</span></td>
-                    <td>
-                        <input type="number" class="set-input" value="${set.weight}"
-                            placeholder="0" inputmode="decimal"
-                            data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
-                    </td>
-                    <td>
-                        <input type="number" class="set-input" value="${set.reps}"
-                            placeholder="0" inputmode="numeric"
-                            data-ex="${exIndex}" data-set="${setIndex}" data-field="reps">
-                    </td>
-                    <td>
-                        <button class="btn-icon danger" data-action="remove-tmpl-set"
-                            data-ex="${exIndex}" data-set="${setIndex}">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2.5">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+            const setsHtml = ex.sets.map((set, setIndex) => {
+                if (isUnilateral) {
+                    return `
+                        <tr>
+                            <td><span class="set-number">${setIndex + 1}</span></td>
+                            <td>
+                                <input type="number" class="set-input" value="${set.weight || ''}"
+                                    placeholder="0" inputmode="decimal"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
+                            </td>
+                            <td>
+                                <input type="number" class="set-input set-input-lr" value="${set.repsL || ''}"
+                                    placeholder="L" inputmode="numeric"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="repsL">
+                            </td>
+                            <td>
+                                <input type="number" class="set-input set-input-lr" value="${set.repsR || ''}"
+                                    placeholder="R" inputmode="numeric"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="repsR">
+                            </td>
+                            <td>
+                                <button class="btn-icon danger" data-action="remove-tmpl-set"
+                                    data-ex="${exIndex}" data-set="${setIndex}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    return `
+                        <tr>
+                            <td><span class="set-number">${setIndex + 1}</span></td>
+                            <td>
+                                <input type="number" class="set-input" value="${set.weight || ''}"
+                                    placeholder="0" inputmode="decimal"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
+                            </td>
+                            <td>
+                                <input type="number" class="set-input" value="${set.reps || ''}"
+                                    placeholder="0" inputmode="numeric"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="reps">
+                            </td>
+                            <td>
+                                <button class="btn-icon danger" data-action="remove-tmpl-set"
+                                    data-ex="${exIndex}" data-set="${setIndex}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }).join('');
 
             return `
                 <div class="workout-exercise-block">
                     <div class="workout-exercise-header">
-                        <h3>${name}</h3>
+                        <div class="header-left-title">
+                            <h3>${name}</h3>
+                            <button class="btn-toggle-unilateral ${isUnilateral ? 'active' : ''}"
+                                data-action="toggle-tmpl-unilateral" data-ex="${exIndex}"
+                                title="Toggle Left/Right tracking">
+                                L/R
+                            </button>
+                        </div>
                         <button class="btn-icon danger" data-action="remove-tmpl-exercise" data-ex="${exIndex}">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2">
@@ -188,12 +231,12 @@ const Templates = (() => {
                             </svg>
                         </button>
                     </div>
-                    <table class="set-table">
+                    <table class="set-table ${isUnilateral ? 'set-table-unilateral' : ''}">
                         <thead>
                             <tr>
                                 <th>Set</th>
                                 <th>kg</th>
-                                <th>Reps</th>
+                                ${isUnilateral ? '<th>L Reps</th><th>R Reps</th>' : '<th>Reps</th>'}
                                 <th></th>
                             </tr>
                         </thead>
@@ -212,6 +255,19 @@ const Templates = (() => {
     }
 
     function attachTemplateEditorListeners(container) {
+        // Toggle unilateral
+        container.querySelectorAll('[data-action="toggle-tmpl-unilateral"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const exIndex = Number(e.currentTarget.dataset.ex);
+                const currentVal = currentTemplate.exercises[exIndex].isUnilateral;
+                const exercise = GymData.getExerciseById(currentTemplate.exercises[exIndex].exerciseId);
+                const defaultVal = exercise ? !!exercise.isUnilateral : false;
+                const activeVal = currentVal !== undefined ? currentVal : defaultVal;
+                currentTemplate.exercises[exIndex].isUnilateral = !activeVal;
+                renderTemplateExercises();
+            });
+        });
+
         // Set inputs
         container.querySelectorAll('.set-input').forEach(input => {
             input.addEventListener('input', (e) => {
@@ -229,6 +285,8 @@ const Templates = (() => {
                 sets.push({
                     weight: lastSet ? lastSet.weight : '',
                     reps: lastSet ? lastSet.reps : '',
+                    repsL: lastSet ? lastSet.repsL : '',
+                    repsR: lastSet ? lastSet.repsR : '',
                 });
                 renderTemplateExercises();
             });
@@ -259,9 +317,12 @@ const Templates = (() => {
     // ---------- Add Exercise to Template ----------
     function addExerciseToTemplate(exerciseId) {
         if (!currentTemplate) return;
+        const exercise = GymData.getExerciseById(exerciseId);
+        const isUnilateral = exercise ? !!exercise.isUnilateral : false;
         currentTemplate.exercises.push({
             exerciseId,
-            sets: [{ weight: '', reps: '' }],
+            isUnilateral,
+            sets: [{ weight: '', reps: '', repsL: '', repsR: '' }],
         });
         renderTemplateExercises();
     }

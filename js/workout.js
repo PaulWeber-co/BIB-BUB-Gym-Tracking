@@ -70,10 +70,13 @@ const Workout = (() => {
     // ---------- Add Exercise ----------
     function addExercise(exerciseId) {
         if (!currentWorkout) return;
+        const exercise = GymData.getExerciseById(exerciseId);
+        const isUnilateral = exercise ? !!exercise.isUnilateral : false;
         currentWorkout.exercises.push({
             exerciseId,
+            isUnilateral,
             notes: '',
-            sets: [{ weight: '', reps: '', completed: false }],
+            sets: [{ weight: '', reps: '', repsL: '', repsR: '', completed: false }],
         });
         renderWorkout();
     }
@@ -94,6 +97,8 @@ const Workout = (() => {
         sets.push({
             weight: lastSet ? lastSet.weight : '',
             reps: lastSet ? lastSet.reps : '',
+            repsL: lastSet ? lastSet.repsL : '',
+            repsR: lastSet ? lastSet.repsR : '',
             completed: false,
         });
         renderWorkout();
@@ -199,36 +204,78 @@ const Workout = (() => {
         container.innerHTML = currentWorkout.exercises.map((ex, exIndex) => {
             const exercise = GymData.getExerciseById(ex.exerciseId);
             const name = exercise ? exercise.name : 'Unknown Exercise';
+            const isUnilateral = ex.isUnilateral !== undefined ? ex.isUnilateral : (exercise ? !!exercise.isUnilateral : false);
 
-            const setsHtml = ex.sets.map((set, setIndex) => `
-                <tr class="${set.completed ? 'set-completed' : ''}">
-                    <td><span class="set-number">${setIndex + 1}</span></td>
-                    <td>
-                        <input type="number" class="set-input" value="${set.weight}"
-                            placeholder="0" inputmode="decimal"
-                            data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
-                    </td>
-                    <td>
-                        <input type="number" class="set-input" value="${set.reps}"
-                            placeholder="0" inputmode="numeric"
-                            data-ex="${exIndex}" data-set="${setIndex}" data-field="reps">
-                    </td>
-                    <td>
-                        <button class="set-check-btn ${set.completed ? 'checked' : ''}"
-                            data-ex="${exIndex}" data-set="${setIndex}" data-action="toggle-set">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="3">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+            const setsHtml = ex.sets.map((set, setIndex) => {
+                if (isUnilateral) {
+                    return `
+                        <tr class="${set.completed ? 'set-completed' : ''}">
+                            <td><span class="set-number">${setIndex + 1}</span></td>
+                            <td>
+                                <input type="number" class="set-input" value="${set.weight || ''}"
+                                    placeholder="0" inputmode="decimal"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
+                            </td>
+                            <td>
+                                <input type="number" class="set-input set-input-lr" value="${set.repsL || ''}"
+                                    placeholder="L" inputmode="numeric"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="repsL">
+                            </td>
+                            <td>
+                                <input type="number" class="set-input set-input-lr" value="${set.repsR || ''}"
+                                    placeholder="R" inputmode="numeric"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="repsR">
+                            </td>
+                            <td>
+                                <button class="set-check-btn ${set.completed ? 'checked' : ''}"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-action="toggle-set">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="3">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    return `
+                        <tr class="${set.completed ? 'set-completed' : ''}">
+                            <td><span class="set-number">${setIndex + 1}</span></td>
+                            <td>
+                                <input type="number" class="set-input" value="${set.weight || ''}"
+                                    placeholder="0" inputmode="decimal"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="weight">
+                            </td>
+                            <td>
+                                <input type="number" class="set-input" value="${set.reps || ''}"
+                                    placeholder="0" inputmode="numeric"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-field="reps">
+                            </td>
+                            <td>
+                                <button class="set-check-btn ${set.completed ? 'checked' : ''}"
+                                    data-ex="${exIndex}" data-set="${setIndex}" data-action="toggle-set">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="3">
+                                        <polyline points="20 6 9 17 4 12"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }).join('');
 
             return `
                 <div class="workout-exercise-block">
                     <div class="workout-exercise-header">
-                        <h3>${name}</h3>
+                        <div class="header-left-title">
+                            <h3>${name}</h3>
+                            <button class="btn-toggle-unilateral ${isUnilateral ? 'active' : ''}"
+                                data-action="toggle-unilateral" data-ex="${exIndex}"
+                                title="Toggle Left/Right tracking">
+                                L/R
+                            </button>
+                        </div>
                         <button class="btn-icon danger" data-action="remove-exercise" data-ex="${exIndex}">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2">
@@ -243,12 +290,12 @@ const Workout = (() => {
                             data-ex="${exIndex}" data-action="update-notes"
                             rows="1">${ex.notes || ''}</textarea>
                     </div>
-                    <table class="set-table">
+                    <table class="set-table ${isUnilateral ? 'set-table-unilateral' : ''}">
                         <thead>
                             <tr>
                                 <th>Set</th>
                                 <th>kg</th>
-                                <th>Reps</th>
+                                ${isUnilateral ? '<th>L Reps</th><th>R Reps</th>' : '<th>Reps</th>'}
                                 <th>✓</th>
                             </tr>
                         </thead>
@@ -271,6 +318,19 @@ const Workout = (() => {
 
     // ---------- Event Listeners ----------
     function attachWorkoutListeners(container) {
+        // Toggle unilateral mode
+        container.querySelectorAll('[data-action="toggle-unilateral"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const exIndex = Number(e.currentTarget.dataset.ex);
+                const currentVal = currentWorkout.exercises[exIndex].isUnilateral;
+                const exercise = GymData.getExerciseById(currentWorkout.exercises[exIndex].exerciseId);
+                const defaultVal = exercise ? !!exercise.isUnilateral : false;
+                const activeVal = currentVal !== undefined ? currentVal : defaultVal;
+                currentWorkout.exercises[exIndex].isUnilateral = !activeVal;
+                renderWorkout();
+            });
+        });
+
         // Set inputs
         container.querySelectorAll('.set-input').forEach(input => {
             input.addEventListener('input', (e) => {

@@ -104,16 +104,25 @@ const History = (() => {
 
             html += `
                 <div class="detail-exercise-block">
-                    <div class="detail-exercise-name">${name}</div>
+                    <div class="detail-exercise-name">
+                        ${name}
+                        ${ex.isUnilateral ? '<span class="badge-unilateral">L/R</span>' : ''}
+                    </div>
                     ${ex.notes ? `<div class="detail-exercise-notes">"${ex.notes}"</div>` : ''}
-                    ${completedSets.map((s, i) => `
-                        <div class="detail-set-row">
-                            <span class="detail-set-label">Set ${i + 1}</span>
-                            <span>${s.weight || 0} kg</span>
-                            <span>×</span>
-                            <span>${s.reps || 0} reps</span>
-                        </div>
-                    `).join('')}
+                    ${completedSets.map((s, i) => {
+                        const isUnil = ex.isUnilateral || (s.repsL !== undefined && s.repsL !== '') || (s.repsR !== undefined && s.repsR !== '');
+                        const repsStr = isUnil
+                            ? `L:${s.repsL || 0} / R:${s.repsR || 0} reps`
+                            : `${s.reps || 0} reps`;
+                        return `
+                            <div class="detail-set-row">
+                                <span class="detail-set-label">Set ${i + 1}</span>
+                                <span>${s.weight || 0} kg</span>
+                                <span>×</span>
+                                <span>${repsStr}</span>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             `;
         });

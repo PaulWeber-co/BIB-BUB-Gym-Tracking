@@ -22,21 +22,21 @@ const GymData = (() => {
         { id: 'ex-seated-cable-row', name: 'Seated Cable Row', muscleGroup: 'Back', category: 'Cable' },
         { id: 'ex-pullup', name: 'Pull-up', muscleGroup: 'Back', category: 'Bodyweight' },
         { id: 'ex-tbar-row', name: 'T-Bar Row', muscleGroup: 'Back', category: 'Barbell' },
-        { id: 'ex-db-row', name: 'Dumbbell Row', muscleGroup: 'Back', category: 'Dumbbell' },
+        { id: 'ex-db-row', name: 'Dumbbell Row', muscleGroup: 'Back', category: 'Dumbbell', isUnilateral: true },
 
         // Legs
         { id: 'ex-squat', name: 'Squat', muscleGroup: 'Legs', category: 'Barbell' },
         { id: 'ex-leg-press', name: 'Leg Press', muscleGroup: 'Legs', category: 'Machine' },
         { id: 'ex-leg-curl', name: 'Leg Curl', muscleGroup: 'Legs', category: 'Machine' },
         { id: 'ex-leg-extension', name: 'Leg Extension', muscleGroup: 'Legs', category: 'Machine' },
-        { id: 'ex-lunges', name: 'Lunges', muscleGroup: 'Legs', category: 'Dumbbell' },
+        { id: 'ex-lunges', name: 'Lunges', muscleGroup: 'Legs', category: 'Dumbbell', isUnilateral: true },
         { id: 'ex-calf-raise', name: 'Calf Raise', muscleGroup: 'Legs', category: 'Machine' },
         { id: 'ex-rdl', name: 'Romanian Deadlift', muscleGroup: 'Legs', category: 'Barbell' },
         { id: 'ex-hack-squat', name: 'Hack Squat', muscleGroup: 'Legs', category: 'Machine' },
 
         // Shoulders
         { id: 'ex-ohp', name: 'Overhead Press', muscleGroup: 'Shoulders', category: 'Barbell' },
-        { id: 'ex-lateral-raise', name: 'Lateral Raise', muscleGroup: 'Shoulders', category: 'Dumbbell' },
+        { id: 'ex-lateral-raise', name: 'Lateral Raise', muscleGroup: 'Shoulders', category: 'Dumbbell', isUnilateral: true },
         { id: 'ex-front-raise', name: 'Front Raise', muscleGroup: 'Shoulders', category: 'Dumbbell' },
         { id: 'ex-face-pull', name: 'Face Pull', muscleGroup: 'Shoulders', category: 'Cable' },
         { id: 'ex-rear-delt-fly', name: 'Rear Delt Fly', muscleGroup: 'Shoulders', category: 'Dumbbell' },
@@ -44,11 +44,11 @@ const GymData = (() => {
 
         // Arms
         { id: 'ex-barbell-curl', name: 'Barbell Curl', muscleGroup: 'Arms', category: 'Barbell' },
-        { id: 'ex-hammer-curl', name: 'Hammer Curl', muscleGroup: 'Arms', category: 'Dumbbell' },
+        { id: 'ex-hammer-curl', name: 'Hammer Curl', muscleGroup: 'Arms', category: 'Dumbbell', isUnilateral: true },
         { id: 'ex-tricep-pushdown', name: 'Tricep Pushdown', muscleGroup: 'Arms', category: 'Cable' },
         { id: 'ex-skull-crusher', name: 'Skull Crusher', muscleGroup: 'Arms', category: 'Barbell' },
         { id: 'ex-preacher-curl', name: 'Preacher Curl', muscleGroup: 'Arms', category: 'Barbell' },
-        { id: 'ex-db-curl', name: 'Dumbbell Curl', muscleGroup: 'Arms', category: 'Dumbbell' },
+        { id: 'ex-db-curl', name: 'Dumbbell Curl', muscleGroup: 'Arms', category: 'Dumbbell', isUnilateral: true },
         { id: 'ex-tricep-dip', name: 'Tricep Dip', muscleGroup: 'Arms', category: 'Bodyweight' },
 
         // Core
@@ -221,14 +221,21 @@ const GymData = (() => {
                     if (completedSets.length === 0) return;
 
                     const maxWeight = Math.max(...completedSets.map(s => Number(s.weight) || 0));
-                    const totalVolume = completedSets.reduce((sum, s) =>
-                        sum + (Number(s.weight) || 0) * (Number(s.reps) || 0), 0);
+                    const totalVolume = completedSets.reduce((sum, s) => {
+                        const w = Number(s.weight) || 0;
+                        const repsCount = (s.repsL !== undefined || s.repsR !== undefined)
+                            ? ((Number(s.repsL) || 0) + (Number(s.repsR) || 0))
+                            : (Number(s.reps) || 0);
+                        return sum + w * repsCount;
+                    }, 0);
 
                     // Estimated 1RM using Brzycki formula: weight × (36 / (37 - reps))
                     let est1rm = 0;
                     completedSets.forEach(s => {
                         const w = Number(s.weight) || 0;
-                        const r = Number(s.reps) || 0;
+                        const r = (s.repsL !== undefined || s.repsR !== undefined)
+                            ? Math.max(Number(s.repsL) || 0, Number(s.repsR) || 0)
+                            : (Number(s.reps) || 0);
                         if (r > 0 && r < 37 && w > 0) {
                             const e1rm = w * (36 / (37 - r));
                             if (e1rm > est1rm) est1rm = e1rm;

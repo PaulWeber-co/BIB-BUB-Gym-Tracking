@@ -2,9 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="description" content="Track your gym workouts, create custom exercises, and monitor your progress.">
-    <meta name="theme-color" content="#dc3545">
+    <meta name="theme-color" content="#ffffff">
+
+    <!-- iOS PWA / Home Screen -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="BIB-BUB Gym">
+    <meta name="format-detection" content="telephone=no">
+
     <title>BIB-BUB Gym Tracker</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -254,6 +261,12 @@
                         <option value="Bodyweight">Bodyweight</option>
                         <option value="Other">Other</option>
                     </select>
+                </div>
+                <div class="form-group-checkbox">
+                    <label class="checkbox-label" for="exercise-unilateral-checkbox">
+                        <input type="checkbox" id="exercise-unilateral-checkbox">
+                        <span>Unilateral (Track Left & Right side separately)</span>
+                    </label>
                 </div>
                 <input type="hidden" id="exercise-edit-id" value="">
                 <button id="btn-save-exercise" class="btn btn-primary btn-large">Save Exercise</button>

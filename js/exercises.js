@@ -22,6 +22,7 @@ const Exercises = (() => {
                     <div class="exercise-item-name">
                         ${ex.name}
                         ${ex.isCustom ? '<span class="badge-custom">Custom</span>' : ''}
+                        ${ex.isUnilateral ? '<span class="badge-unilateral">L/R</span>' : ''}
                     </div>
                     <div class="exercise-item-meta">${ex.muscleGroup} · ${ex.category}</div>
                 </div>
@@ -78,6 +79,7 @@ const Exercises = (() => {
         document.getElementById('exercise-name-input').value = '';
         document.getElementById('exercise-muscle-select').value = '';
         document.getElementById('exercise-category-select').value = '';
+        document.getElementById('exercise-unilateral-checkbox').checked = false;
         document.getElementById('exercise-edit-id').value = '';
         document.getElementById('modal-create-exercise').classList.add('active');
     }
@@ -91,6 +93,7 @@ const Exercises = (() => {
         document.getElementById('exercise-name-input').value = ex.name;
         document.getElementById('exercise-muscle-select').value = ex.muscleGroup;
         document.getElementById('exercise-category-select').value = ex.category;
+        document.getElementById('exercise-unilateral-checkbox').checked = !!ex.isUnilateral;
         document.getElementById('exercise-edit-id').value = ex.id;
         document.getElementById('modal-create-exercise').classList.add('active');
     }
@@ -100,6 +103,7 @@ const Exercises = (() => {
         const name = document.getElementById('exercise-name-input').value.trim();
         const muscleGroup = document.getElementById('exercise-muscle-select').value;
         const category = document.getElementById('exercise-category-select').value;
+        const isUnilateral = document.getElementById('exercise-unilateral-checkbox').checked;
         const editId = document.getElementById('exercise-edit-id').value;
 
         if (!name) {
@@ -119,6 +123,7 @@ const Exercises = (() => {
             name,
             muscleGroup,
             category,
+            isUnilateral,
         };
 
         if (editId) {

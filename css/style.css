@@ -21,9 +21,13 @@
     --radius-sm: 8px;
     --shadow: 0 2px 8px rgba(0,0,0,0.08);
     --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
-    --nav-height: 64px;
+    --nav-height: calc(64px + env(safe-area-inset-bottom, 0px));
     --header-height: 56px;
     --transition: 0.2s ease;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
 }
 
 /* ---------- Reset & Base ---------- */
@@ -36,6 +40,8 @@
 html {
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
+    /* Prevent overscroll bounce on iOS */
+    overscroll-behavior: none;
 }
 
 body {
@@ -45,6 +51,19 @@ body {
     min-height: 100dvh;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
+    /* iOS: prevent text selection on long press for interactive elements */
+    -webkit-user-select: none;
+    user-select: none;
+    /* iOS: prevent callout on long press */
+    -webkit-touch-callout: none;
+    /* iOS: smooth momentum scrolling */
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Allow text selection in inputs and textareas */
+input, textarea, select {
+    -webkit-user-select: auto;
+    user-select: auto;
 }
 
 /* ---------- Views ---------- */
@@ -65,11 +84,14 @@ body {
     z-index: 10;
     background: var(--color-surface);
     padding: 16px 20px;
+    padding-top: calc(16px + var(--safe-top));
+    padding-left: calc(20px + var(--safe-left));
+    padding-right: calc(20px + var(--safe-right));
     border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: var(--header-height);
+    min-height: calc(var(--header-height) + var(--safe-top));
 }
 
 .view-header h1 {
@@ -98,6 +120,8 @@ body {
     z-index: 100;
     background: var(--color-bg);
     animation: slideUp 0.3s ease;
+    /* iOS: prevent background scroll */
+    overflow: hidden;
 }
 
 .view-overlay.active {
@@ -114,9 +138,12 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
+    padding-top: calc(12px + var(--safe-top));
+    padding-left: calc(16px + var(--safe-left));
+    padding-right: calc(16px + var(--safe-right));
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
-    min-height: var(--header-height);
+    min-height: calc(var(--header-height) + var(--safe-top));
     flex-shrink: 0;
 }
 
@@ -128,7 +155,9 @@ body {
 .overlay-content {
     flex: 1;
     overflow-y: auto;
-    padding-bottom: 100px;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(100px + var(--safe-bottom));
+    overscroll-behavior-y: contain;
 }
 
 /* ---------- Header Buttons ---------- */
@@ -254,10 +283,13 @@ body {
     background: var(--color-surface);
     border-top: 1px solid var(--color-border);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-around;
     z-index: 50;
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-top: 6px;
+    padding-bottom: var(--safe-bottom);
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
 }
 
 .nav-tab {
@@ -270,12 +302,15 @@ body {
     border: none;
     color: var(--color-text-secondary);
     cursor: pointer;
-    padding: 6px 12px;
+    padding: 6px 8px;
     font-family: var(--font);
     font-size: 0.65rem;
     font-weight: 500;
     transition: color var(--transition);
     -webkit-tap-highlight-color: transparent;
+    /* iOS: min touch target 44x44 */
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .nav-tab.active {
@@ -310,7 +345,8 @@ body {
 
 .text-input, .select-input, .search-input {
     font-family: var(--font);
-    font-size: 1rem;
+    /* iOS: 16px minimum prevents auto-zoom on focus */
+    font-size: 16px;
     padding: 12px 16px;
     border: 2px solid var(--color-border);
     border-radius: var(--radius-sm);
@@ -319,6 +355,9 @@ body {
     outline: none;
     transition: border-color var(--transition);
     width: 100%;
+    /* iOS: remove default styling */
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .text-input:focus, .select-input:focus, .search-input:focus {
@@ -521,9 +560,79 @@ body {
     vertical-align: middle;
 }
 
+.badge-unilateral {
+    display: inline-block;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
 .exercise-item-actions {
     display: flex;
     gap: 4px;
+}
+
+.header-left-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-toggle-unilateral {
+    font-family: var(--font);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1.5px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-toggle-unilateral.active {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.form-group-checkbox {
+    display: flex;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.set-input-lr {
+    width: 50px;
+}
+
+.set-table-unilateral th {
+    padding: 10px 4px 6px;
+    font-size: 0.65rem;
 }
 
 /* ---------- Workout Tracking ---------- */
@@ -615,14 +724,19 @@ body {
     width: 70px;
     text-align: center;
     font-family: var(--font);
-    font-size: 0.95rem;
+    /* iOS: 16px prevents auto-zoom on focus */
+    font-size: 16px;
     font-weight: 600;
-    padding: 8px 4px;
+    padding: 10px 4px;
     border: 1.5px solid var(--color-border);
     border-radius: 6px;
     outline: none;
     background: var(--color-bg);
     transition: border-color var(--transition);
+    -webkit-appearance: none;
+    appearance: none;
+    /* iOS: proper touch target */
+    min-height: 44px;
 }
 
 .set-input:focus {
@@ -631,8 +745,9 @@ body {
 }
 
 .set-check-btn {
-    width: 32px;
-    height: 32px;
+    /* iOS: 44px minimum touch target */
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     border: 2px solid var(--color-border);
     background: var(--color-surface);
@@ -641,6 +756,7 @@ body {
     align-items: center;
     justify-content: center;
     transition: all var(--transition);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .set-check-btn.checked {
@@ -670,6 +786,9 @@ body {
     left: 0;
     right: 0;
     padding: 12px 16px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+    padding-left: calc(16px + var(--safe-left));
+    padding-right: calc(16px + var(--safe-right));
     background: var(--color-surface);
     border-top: 1px solid var(--color-border);
     z-index: 101;
@@ -1123,5 +1242,71 @@ body {
         max-width: 480px;
         left: 50%;
         transform: translateX(-50%);
+    }
+}
+
+/* ---------- iOS-specific fixes ---------- */
+
+/* Prevent iOS rubber-band scroll on body */
+@supports (-webkit-touch-callout: none) {
+    body {
+        /* iOS standalone (home screen) status bar space */
+        padding-top: constant(safe-area-inset-top); /* iOS 11.0 */
+        padding-top: env(safe-area-inset-top); /* iOS 11.2+ */
+    }
+
+    /* Fix iOS input styling */
+    input[type="number"],
+    input[type="text"] {
+        -webkit-appearance: none;
+        -moz-appearance: textfield;
+    }
+
+    /* Smooth scrolling for all scrollable containers */
+    .overlay-content,
+    .modal-body,
+    .modal-fullscreen .modal-body {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Fix iOS bottom sheet modals */
+    .modal-timer-content {
+        padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Fix sticky headers in iOS Safari */
+    .view-header {
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+    }
+
+    /* Prevent text resize on orientation change */
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+}
+
+/* iPhone 12/13/14 specific (390px logical width) */
+@media (max-width: 390px) {
+    .view-content {
+        padding: 12px;
+        gap: 16px;
+    }
+
+    .filter-bar {
+        flex-direction: column;
+    }
+
+    .filter-bar .select-input {
+        width: 100%;
+    }
+
+    .set-input {
+        width: 60px;
+    }
+
+    .history-stats {
+        flex-wrap: wrap;
+        gap: 8px;
     }
 }

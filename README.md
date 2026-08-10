@@ -7,7 +7,8 @@ A modern gym workout tracking web app — track exercises, create routines, and 
 ## Features
 
 - 🏋️ **Workout Tracking** – Start workouts, add exercises, log sets with weight and reps
-- ✏️ **Custom Exercises** – Create your own exercises with muscle group and category
+- ↔️ **Unilateral Exercises** – Track Left & Right side separately (L Reps / R Reps) for single-arm/leg exercises
+- ✏️ **Custom Exercises** – Create your own exercises with muscle group, category, and unilateral setting
 - 📜 **Templates / Routines** – Save workout plans and start them with one tap
 - 🗒️ **Exercise Notes** – Add notes per exercise (e.g. grip width, form cues)
 - 📈 **Progress Charts** – View your progress per exercise (Max Weight, Volume, Est. 1RM)
