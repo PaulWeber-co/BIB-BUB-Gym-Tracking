@@ -3,7 +3,7 @@
    Dark surfaces, ring colours, SF Pro, tabular numerals.
    ============================================================ */
 
-:root {
+:root, html[data-theme="dark"] {
     /* Surfaces */
     --bg: #000000;
     --elev-1: #1C1C1E;

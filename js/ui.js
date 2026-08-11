@@ -434,7 +434,22 @@ const UI = (() => {
         if (navigator.vibrate) {
             try { navigator.vibrate(pattern); } catch (e) { /* ignore */ }
         }
-        // iOS Workaround: versteckten Switch klicken
+        try {
+            const ctx = ensureAudio();
+            if (ctx && ctx.state === 'running') {
+                const t0 = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, t0);
+                osc.frequency.exponentialRampToValueAtTime(300, t0 + 0.007);
+                gain.gain.setValueAtTime(0.03, t0);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.007);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(t0);
+                osc.stop(t0 + 0.008);
+            }
+        } catch (e) { /* ignore */ }
         if (!hapticLabel) {
             const wrap = el(`<div style="position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;left:-10px;top:-10px">
                 <input type="checkbox" switch id="ui-haptic-input">

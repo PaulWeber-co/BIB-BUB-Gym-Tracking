@@ -40,10 +40,10 @@ const App = (() => {
      * im zugehörigen Modul, die den Inhalt neu zeichnet.
      */
     const VIEWS = {
-        summary:   { id: 'view-summary',   render: () => Summary.render() },
-        routines:  { id: 'view-routines',  render: () => Routines.render() },
-        history:   { id: 'view-history',   render: () => History.render() },
-        trends:    { id: 'view-trends',    render: () => Trends.render() },
+        summary: { id: 'view-summary', render: () => Summary.render() },
+        routines: { id: 'view-routines', render: () => Routines.render() },
+        history: { id: 'view-history', render: () => History.render() },
+        trends: { id: 'view-trends', render: () => Trends.render() },
         exercises: { id: 'view-exercises', render: () => Exercises.render() },
     };
 

@@ -181,11 +181,7 @@ const Store = (() => {
         if (t === 'system') {
             effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
         }
-        if (effective === 'light') {
-            document.documentElement.setAttribute('data-theme', 'light');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
+        document.documentElement.setAttribute('data-theme', effective);
     }
 
 
