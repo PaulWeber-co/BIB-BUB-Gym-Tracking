@@ -190,10 +190,18 @@ const App = (() => {
         // Bei jedem Scroll-Event prüfen, ob ein Schatten gezeigt werden soll
         window.addEventListener('scroll', updateNavShadow, { passive: true });
 
-        // ---- Schritt 5: Audio für iOS vorbereiten ----
+        // ---- Schritt 5: Audio & Haptik für iOS vorbereiten ----
         // iOS Safari blockiert Sound, bis der Benutzer einmal tippt.
         // Bei der ersten Berührung "entsperren" wir den Audio-Kontext.
         document.addEventListener('pointerdown', () => UI.unlockAudio(), { once: true });
+
+        // ---- Schritt 6: Globales haptisches Feedback für ALLE Buttons ----
+        // Sobald irgendein Button, eine Karte oder ein Chip angetippt wird,
+        // geben wir eine kurze körperliche Vibration als Rückmeldung.
+        document.addEventListener('pointerdown', (e) => {
+            const btn = e.target.closest('button, .btn, .card-tap, .chip, .list-row, .bar-btn, .action-item, [data-act]');
+            if (btn) UI.haptic(6);
+        }, { passive: true });
 
         // ---- Schritt 6: Laufendes Workout wiederherstellen ----
         // Falls die Seite neu geladen wurde (oder iOS den Tab gelöscht hat),

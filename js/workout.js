@@ -708,6 +708,7 @@ const Workout = (() => {
 
         Store.saveWorkout(workout);
         const records = Stats.workoutRecords(workout);
+        UI.haptic([20, 60, 20, 60, 40]);
 
         stopRest(true);
         stopTicker();
