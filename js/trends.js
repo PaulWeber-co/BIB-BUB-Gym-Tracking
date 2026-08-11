@@ -85,8 +85,8 @@ const Trends = (() => {
                     ariaLabel: 'Weekly training volume',
                 })}</div>
                 <div class="chart-legend">
-                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#FA114F"></span>Volume per week</div>
-                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:rgba(235,235,245,.35)"></span>Weekly goal</div>
+                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#2C68C8"></span>Volume per week</div>
+                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#8A8A82"></span>Weekly goal</div>
                 </div>
             </div>
 
@@ -97,7 +97,7 @@ const Trends = (() => {
                 <div class="chart-wrap">${Charts.bars(workoutBars, {
                     goal: Store.settings().goalWorkouts,
                     height: 110,
-                    color: '#5CD000', colorTo: '#C8FF3D',
+                    color: '#16386E',
                     labels: false,
                     ariaLabel: 'Workouts per week',
                 })}</div>
@@ -212,8 +212,8 @@ const Trends = (() => {
                 </div>
                 <div class="chart-wrap">${Charts.line(points, {
                     height: 175,
-                    color: metric === 'volume' ? '#5AF3FF' : '#FF4E77',
-                    colorSoft: metric === 'volume' ? 'rgba(0,184,212,0.30)' : 'rgba(250,17,79,0.30)',
+                    color: metric === 'volume' ? '#16386E' : '#2C68C8',
+                    colorSoft: metric === 'volume' ? 'rgba(22,56,110,0.20)' : 'rgba(44,104,200,0.20)',
                     formatValue: v => (metric === 'reps' ? String(Math.round(v)) : String(Math.round(v * 10) / 10)),
                     ariaLabel: `${m.title} progression`,
                 })}</div>
@@ -264,10 +264,12 @@ const Trends = (() => {
                 <div class="card">
                     <div class="empty">
                         <strong>No body weight logged</strong>
-                        Track your weight alongside training volume to see how the two move together.
+                        Your protein target is derived from body weight, and the chart shows how weight and
+                        training volume move together.
                     </div>
-                    <button class="btn btn-tint btn-block" data-act="add-weight">Log Body Weight</button>
-                </div>`;
+                    <button class="btn btn-fill btn-block" data-act="add-weight">Log Body Weight</button>
+                </div>
+                ${proteinCard()}`;
         }
 
         const points = log.slice(-60).map(e => ({
@@ -280,19 +282,21 @@ const Trends = (() => {
                 <div class="metric-big">${Stats.fmtWeight(trend.latest.weight, { decimals: 1 })}<span class="unit"> ${Store.unit()}</span></div>
                 <div class="metric-caption">
                     ${UI.esc(Stats.fmtRelativeDay(trend.latest.date))}
-                    ${trend.delta !== 0 ? ` &middot; <span style="color:var(--label)">${trend.delta > 0 ? '+' : ''}${Stats.fmtWeight(trend.delta, { decimals: 1 })} ${Store.unit()}</span> in 30 days` : ''}
+                    ${trend.delta !== 0 ? ` &middot; <span style="color:var(--ink)">${trend.delta > 0 ? '+' : ''}${Stats.fmtWeight(trend.delta, { decimals: 1 })} ${Store.unit()}</span> in 30 days` : ''}
                 </div>
                 <div class="chart-wrap">${Charts.line(points, {
                     height: 175,
-                    color: '#C8FF3D', colorSoft: 'rgba(92,208,0,0.30)',
+                    color: '#16386E', colorSoft: 'rgba(22,56,110,0.20)',
                     formatValue: v => String(Math.round(v * 10) / 10),
                     ariaLabel: 'Body weight',
                 })}</div>
             </div>
 
-            <button class="btn btn-tint btn-block" data-act="add-weight">Log Body Weight</button>
+            <button class="btn btn-fill btn-block" data-act="add-weight">Log Body Weight</button>
 
-            <div class="section-title"><h2 style="font-size:1.0625rem">Entries</h2></div>
+            ${proteinCard()}
+
+            <div class="section-title"><h2>Entries</h2></div>
             <div class="list">
                 ${log.slice().reverse().slice(0, 15).map(e => `
                     <div class="list-row">
@@ -322,6 +326,7 @@ const Trends = (() => {
         if (num <= 0) return;
         Store.addBodyEntry(Store.toBase(num));
         render();
+        App.refreshAll();          // the protein target follows body weight
         UI.toast({ title: 'Body weight saved', tone: 'success' });
     }
 
@@ -356,6 +361,7 @@ const Trends = (() => {
                     break;
                 case 'open-workout': History.openDetail(btn.dataset.id); break;
                 case 'add-weight': addWeight(); break;
+                case 'protein': Nutrition.openSheet(); break;
                 case 'delete-weight':
                     Store.deleteBodyEntry(btn.dataset.date);
                     render();
@@ -371,5 +377,10 @@ const Trends = (() => {
         render();
     }
 
-    return { render, bind, showExercise };
+    /** Opens the body weight prompt from anywhere (the protein sheet uses it). */
+    function openWeightPrompt() {
+        addWeight();
+    }
+
+    return { render, bind, showExercise, openWeightPrompt };
 })();

@@ -40,8 +40,7 @@ const Picker = (() => {
      * Chest = Rot, Back = Blau, Legs = Lila, usw.
      */
     function avatar(ex) {
-        const color = Store.MUSCLE_COLORS[ex.muscleGroup] || Store.MUSCLE_COLORS.Other;
-        return `<div class="pick-avatar" style="background:${color}22;color:${color}">${UI.esc(initials(ex.name))}</div>`;
+        return Muscles.thumb(ex);
     }
 
     /**

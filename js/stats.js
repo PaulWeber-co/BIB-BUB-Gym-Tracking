@@ -269,15 +269,24 @@ const Stats = (() => {
     function rings(anchor = new Date()) {
         const s = Store.settings();
         const t = weekTotals(anchor);
-        const mk = (value, goal) => ({
-            value,
-            goal: goal || 1,
-            pct: goal > 0 ? value / goal : 0,
-        });
+        const proteinGoal = Store.proteinTarget();
+
         return {
-            volume: mk(t.volume, s.goalVolume),
-            workouts: mk(t.workouts, s.goalWorkouts),
-            sets: mk(t.sets, s.goalSets),
+            protein: {
+                value: Store.proteinOn(anchor),
+                goal: proteinGoal,
+                pct: proteinGoal ? Store.proteinOn(anchor) / proteinGoal : 0,
+            },
+            workouts: {
+                value: t.workouts,
+                goal: s.goalWorkouts || 1,
+                pct: s.goalWorkouts > 0 ? t.workouts / s.goalWorkouts : 0,
+            },
+            sets: {
+                value: t.sets,
+                goal: s.goalSets || 1,
+                pct: s.goalSets > 0 ? t.sets / s.goalSets : 0,
+            },
             totals: t,
         };
     }
@@ -671,10 +680,11 @@ const Stats = (() => {
         DAY,
         startOfDay, startOfWeek, addDays, dayKey, sameDay,
         isUnilateralSet, setReps, setTopReps, setWeight, setVolume, isWorkingSet, e1rm, setE1rm,
-        workoutTotals, workoutTitle, workoutsBetween, rangeTotals, weekTotals, rings, weekDays,
+        workoutTotals, workoutTitle, workoutsBetween, rangeTotals, weekTotals, goals, weekDays,
         dailySeries, weeklySeries, muscleSplit, activityCalendar,
         weekStreak, daysSinceLastWorkout, allTime,
         exerciseSeries, records, lastSession, bestBefore, workoutRecords, recentRecords,
+        proteinSeries, proteinStreak, proteinAverage,
         bodySeries, bodyTrend,
         fmtWeight, fmtVolume, fmtDuration, fmtClock, fmtDate, fmtRelativeDay,
     };

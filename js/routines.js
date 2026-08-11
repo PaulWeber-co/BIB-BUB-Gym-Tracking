@@ -285,6 +285,7 @@ const Routines = (() => {
             exercises: workout.exercises.map(ex => ({
                 exerciseId: ex.exerciseId,
                 isUnilateral: !!ex.isUnilateral,
+                supersetId: ex.supersetId || null,
                 restSeconds: null,
                 sets: ex.sets.map(s => ({
                     weight: Number(s.weight) || '',

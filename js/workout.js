@@ -48,6 +48,7 @@ const Workout = (() => {
         if (routine) {
             routine.exercises.forEach(ex => addExerciseObject(ex.exerciseId, {
                 isUnilateral: ex.isUnilateral,
+                supersetId: ex.supersetId,
                 restSeconds: ex.restSeconds,
                 sets: (ex.sets || []).map(s => ({
                     weight: s.weight === '' || s.weight === undefined ? '' : Number(s.weight),
@@ -182,8 +183,12 @@ const Workout = (() => {
             isUnilateral: overrides.isUnilateral !== undefined
                 ? overrides.isUnilateral
                 : (meta ? !!meta.isUnilateral : false),
+            supersetId: overrides.supersetId || null,
             restSeconds: overrides.restSeconds || null,
             notes: overrides.notes || '',
+            notesL: '',
+            notesR: '',
+            splitNotes: false,
             showNote: !!overrides.notes,
             sets,
         });
@@ -211,6 +216,56 @@ const Workout = (() => {
         if (j < 0 || j >= current.exercises.length) return;
         const [item] = current.exercises.splice(i, 1);
         current.exercises.splice(j, 0, item);
+        persist();
+        render();
+    }
+
+    // ------------------------------------------------------------
+    // Supersets — a run of neighbouring exercises sharing an id
+    // ------------------------------------------------------------
+    /** Contiguous blocks of exercise indices; a block is a superset when it holds more than one. */
+    function blocks() {
+        const out = [];
+        current.exercises.forEach((ex, i) => {
+            const prev = out[out.length - 1];
+            if (ex.supersetId && prev && prev.supersetId === ex.supersetId) prev.items.push(i);
+            else out.push({ supersetId: ex.supersetId || null, items: [i] });
+        });
+        return out;
+    }
+
+    function blockOf(i) {
+        return blocks().find(b => b.items.includes(i)) || null;
+    }
+
+    /** The next exercise of the same superset round, or null when there is none. */
+    function nextInSuperset(i) {
+        const block = blockOf(i);
+        if (!block || block.items.length < 2) return null;
+        const pos = block.items.indexOf(i);
+        return pos < block.items.length - 1 ? block.items[pos + 1] : null;
+    }
+
+    function linkSuperset(i) {
+        const a = current.exercises[i];
+        const b = current.exercises[i + 1];
+        if (!a || !b) return;
+        const id = a.supersetId || b.supersetId || Store.uid('ss');
+        a.supersetId = id;
+        b.supersetId = id;
+        persist();
+        render();
+        UI.haptic('select');
+    }
+
+    function unlinkSuperset(i) {
+        const block = blockOf(i);
+        current.exercises[i].supersetId = null;
+        // a leftover group of one is not a superset
+        if (block) {
+            const rest = block.items.filter(x => x !== i);
+            if (rest.length === 1) current.exercises[rest[0]].supersetId = null;
+        }
         persist();
         render();
     }
@@ -250,7 +305,16 @@ const Workout = (() => {
             if (set.weight === '') set.weight = 0;
             UI.haptic(14);
             checkRecord(ex, set);
-            if (Store.settings().restAuto && set.type !== 'warmup') startRest(ex.restSeconds || Store.settings().restDefault);
+
+            // Inside a superset you move straight to the next exercise; the rest
+            // timer only starts once the round is finished.
+            const next = nextInSuperset(i);
+            if (next !== null) {
+                const node = body().querySelector(`.wex[data-ex="${next}"]`);
+                if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (Store.settings().restAuto && set.type !== 'warmup') {
+                startRest(ex.restSeconds || Store.settings().restDefault);
+            }
         }
 
         persist();
@@ -295,7 +359,7 @@ const Workout = (() => {
                 tone: 'record',
                 duration: 3200,
             });
-            UI.haptic([12, 60, 12]);
+            UI.haptic('success');
         } else if (w > best.weight + 0.01 && best.weight > 0) {
             UI.toast({
                 title: 'Heaviest set yet',
@@ -303,7 +367,7 @@ const Workout = (() => {
                 tone: 'record',
                 duration: 3200,
             });
-            UI.haptic([12, 60, 12]);
+            UI.haptic('success');
         }
         best.e1rm = Math.max(best.e1rm, e);
         best.weight = Math.max(best.weight, w);
@@ -334,7 +398,7 @@ const Workout = (() => {
         const bar = document.getElementById('rest-bar');
         if (bar) bar.hidden = true;
         persist();
-        if (!silent) UI.haptic(8);
+        if (!silent) UI.haptic('tap');
     }
 
     function adjustRest(delta) {
@@ -344,7 +408,7 @@ const Workout = (() => {
         if (rest.endsAt <= Date.now()) { stopRest(); return; }
         persist();
         tickRest();
-        UI.haptic(8);
+        UI.haptic('tap');
     }
 
     function renderRest() {
@@ -364,7 +428,7 @@ const Workout = (() => {
             const label = document.getElementById('rest-time');
             if (label) label.textContent = '0:00';
             UI.beep(2);
-            UI.haptic([180, 90, 180]);
+            UI.haptic('alarm');
             UI.toast({ title: 'Rest complete', sub: 'Next set is up.', tone: 'success', duration: 2200 });
             stopRest(true);
             return;
@@ -439,7 +503,8 @@ const Workout = (() => {
                 </div>`);
         }
 
-        current.exercises.forEach((ex, i) => {
+        const renderExercise = (i) => {
+            const ex = current.exercises[i];
             const meta = Store.exercise(ex.exerciseId);
             const name = meta ? meta.name : 'Unknown exercise';
             const uni = !!ex.isUnilateral;
@@ -447,6 +512,7 @@ const Workout = (() => {
 
             const head = `
                 <div class="wex-head">
+                    ${meta ? Muscles.thumb(meta, { size: 26 }) : ''}
                     <div class="wex-title" data-act="exercise-info" data-ex="${i}">
                         <div class="wex-name">${UI.esc(name)}${uni ? '<span class="badge badge-lr">L/R</span>' : ''}</div>
                         <div class="wex-meta">${UI.esc(exerciseMetaText(ex))}</div>
@@ -456,11 +522,7 @@ const Workout = (() => {
                     </button>
                 </div>`;
 
-            const note = ex.showNote || ex.notes ? `
-                <div class="wex-note">
-                    <textarea rows="1" placeholder="Notes, cues, machine settings"
-                        data-act="note" data-ex="${i}">${UI.esc(ex.notes || '')}</textarea>
-                </div>` : '';
+            const note = noteHtml(ex, i);
 
             const gridClass = uni ? 'set-grid-2' : 'set-grid-1';
             const header = uni
@@ -492,7 +554,7 @@ const Workout = (() => {
                     </div>`;
             }).join('');
 
-            parts.push(`
+            return `
                 <div class="wex" data-ex="${i}">
                     ${head}
                     ${note}
@@ -503,7 +565,24 @@ const Workout = (() => {
                         ${meta && meta.isBarbell ? `<button class="btn btn-sm" data-act="plates" data-ex="${i}">Plates</button>` : ''}
                         <button class="btn btn-sm" data-act="rest-now" data-ex="${i}">Rest</button>
                     </div>
-                </div>`);
+                </div>`;
+        };
+
+        let supersetCount = 0;
+        blocks().forEach((block) => {
+            if (block.items.length > 1) {
+                const letter = String.fromCharCode(65 + supersetCount++);
+                parts.push(`
+                    <div class="superset">
+                        <div class="superset-label">
+                            <span>Superset ${letter}</span>
+                            <span>${block.items.length} exercises</span>
+                        </div>
+                        ${block.items.map(renderExercise).join('')}
+                    </div>`);
+            } else {
+                parts.push(renderExercise(block.items[0]));
+            }
         });
 
         parts.push(`
@@ -533,32 +612,63 @@ const Workout = (() => {
     function openExerciseMenu(i) {
         const ex = current.exercises[i];
         const meta = Store.exercise(ex.exerciseId);
-        UI.actionSheet({
-            title: meta ? meta.name : 'Exercise',
-            actions: [
-                { label: ex.showNote || ex.notes ? 'Hide Note' : 'Add Note', plain: true, onSelect: () => {
-                    ex.showNote = !(ex.showNote || ex.notes);
-                    if (!ex.showNote) ex.notes = '';
+        const hasNote = ex.showNote || ex.notes || ex.notesL || ex.notesR;
+        const block = blockOf(i);
+        const inSuperset = !!(block && block.items.length > 1);
+
+        const actions = [
+            { label: hasNote ? 'Hide Note' : 'Add Note', plain: true, onSelect: () => {
+                ex.showNote = !hasNote;
+                if (!ex.showNote) { ex.notes = ''; ex.notesL = ''; ex.notesR = ''; }
+                persist(); render();
+            } },
+        ];
+
+        if (ex.isUnilateral) {
+            actions.push({
+                label: ex.splitNotes ? 'Single Note' : 'Separate L / R Notes',
+                plain: true,
+                onSelect: () => {
+                    ex.splitNotes = !ex.splitNotes;
+                    ex.showNote = true;
                     persist(); render();
-                } },
-                { label: `Rest Timer${ex.restSeconds ? ` (${Stats.fmtClock(ex.restSeconds * 1000)})` : ''}`, plain: true, onSelect: () => openRestPicker(i) },
-                { label: ex.isUnilateral ? 'Track Both Sides Together' : 'Track Left / Right Separately', plain: true, onSelect: () => {
-                    ex.isUnilateral = !ex.isUnilateral;
-                    persist(); render();
-                } },
-                { label: 'Exercise History', plain: true, onSelect: () => Exercises.openDetail(ex.exerciseId) },
-                { label: 'Move Up', plain: true, onSelect: () => moveExercise(i, -1) },
-                { label: 'Move Down', plain: true, onSelect: () => moveExercise(i, 1) },
-                { label: 'Remove Exercise', destructive: true, onSelect: async () => {
-                    const ok = await UI.confirm({
-                        title: 'Remove exercise?',
-                        message: 'Logged sets for this exercise are discarded.',
-                        confirmLabel: 'Remove', destructive: true,
-                    });
-                    if (ok) removeExercise(i);
-                } },
-            ],
-        });
+                },
+            });
+        }
+
+        actions.push(
+            { label: `Rest Timer${ex.restSeconds ? ` (${Stats.fmtClock(ex.restSeconds * 1000)})` : ''}`, plain: true, onSelect: () => openRestPicker(i) },
+            { label: ex.isUnilateral ? 'Track Both Sides Together' : 'Track Left / Right Separately', plain: true, onSelect: () => {
+                ex.isUnilateral = !ex.isUnilateral;
+                persist(); render();
+            } },
+        );
+
+        if (inSuperset) {
+            actions.push({ label: 'Remove from Superset', plain: true, onSelect: () => unlinkSuperset(i) });
+        } else if (i < current.exercises.length - 1) {
+            actions.push({
+                label: `Superset with ${Store.exerciseName(current.exercises[i + 1].exerciseId)}`,
+                plain: true,
+                onSelect: () => linkSuperset(i),
+            });
+        }
+
+        actions.push(
+            { label: 'Exercise History', plain: true, onSelect: () => Exercises.openDetail(ex.exerciseId) },
+            { label: 'Move Up', plain: true, onSelect: () => moveExercise(i, -1) },
+            { label: 'Move Down', plain: true, onSelect: () => moveExercise(i, 1) },
+            { label: 'Remove Exercise', destructive: true, onSelect: async () => {
+                const ok = await UI.confirm({
+                    title: 'Remove exercise?',
+                    message: 'Logged sets for this exercise are discarded.',
+                    confirmLabel: 'Remove', destructive: true,
+                });
+                if (ok) removeExercise(i);
+            } },
+        );
+
+        UI.actionSheet({ title: meta ? meta.name : 'Exercise', actions });
     }
 
     function openSetMenu(i, j) {
@@ -693,7 +803,10 @@ const Workout = (() => {
                 .map(ex => ({
                     exerciseId: ex.exerciseId,
                     isUnilateral: !!ex.isUnilateral,
+                    supersetId: ex.supersetId || null,
                     notes: ex.notes || '',
+                    notesL: ex.notesL || '',
+                    notesR: ex.notesR || '',
                     sets: ex.sets.filter(s => s.completed).map(s => ({
                         weight: s.weight === '' ? 0 : Number(s.weight),
                         reps: s.reps === '' ? undefined : Number(s.reps),
@@ -724,28 +837,29 @@ const Workout = (() => {
     /** showSummary(workout, records, offerRoutine) — Zeigt den Abschluss-Bildschirm. */
     function showSummary(workout, records, offerRoutine) {
         const t = Stats.workoutTotals(workout);
-        const ringsNow = Stats.rings();
+        const g = Stats.goals();
 
         UI.sheet({
             title: 'Workout Complete',
             left: 'Done',
             build: (el) => {
                 el.innerHTML = `
-                    <div class="card rings-card">
-                        <div class="rings-figure">${Charts.rings([ringsNow.volume.pct, ringsNow.workouts.pct, ringsNow.sets.pct], { size: 112, stroke: 11 })}</div>
-                        <div class="rings-legend">
-                            <div class="legend-item">
-                                <div class="legend-label">This session</div>
-                                <div class="legend-value lc-1">${Stats.fmtVolume(t.volume)}<span class="unit"> ${Store.unit()}</span></div>
-                            </div>
-                            <div class="legend-item">
-                                <div class="legend-label">Duration</div>
-                                <div class="legend-value lc-2">${Stats.fmtDuration(workout.duration)}</div>
-                            </div>
-                            <div class="legend-item">
-                                <div class="legend-label">Sets</div>
-                                <div class="legend-value lc-3">${t.sets}</div>
-                            </div>
+                    <div class="tile-grid">
+                        <div class="tile tile-dark">
+                            <div class="tile-label">Volume</div>
+                            <div class="tile-value">${Stats.fmtVolume(t.volume)}<span class="unit">${Store.unit()}</span></div>
+                        </div>
+                        <div class="tile tile-dark">
+                            <div class="tile-label">Duration</div>
+                            <div class="tile-value">${Stats.fmtDuration(workout.duration)}</div>
+                        </div>
+                        <div class="tile">
+                            <div class="tile-label">Sets</div>
+                            <div class="tile-value">${t.sets}</div>
+                        </div>
+                        <div class="tile">
+                            <div class="tile-label">Week</div>
+                            <div class="tile-value">${g.workouts.value}<span class="unit">/ ${g.workouts.goal}</span></div>
                         </div>
                     </div>
 
@@ -754,7 +868,7 @@ const Workout = (() => {
                         <div class="card-head"><h3>New Records</h3><span class="card-sub">${records.length}</span></div>
                         ${records.map(r => `
                             <div class="detail-set">
-                                <div class="detail-set-n" style="background:rgba(255,214,10,0.18);color:#FFD60A">PR</div>
+                                <div class="detail-set-n" style="background:#000;color:#fff">PR</div>
                                 <div class="grow">
                                     <div style="font-size:.9375rem">${UI.esc(Store.exerciseName(r.exerciseId))}</div>
                                     <div class="tiny muted">${r.type === 'e1rm' ? 'Estimated 1RM' : 'Heaviest set'} &middot; ${Stats.fmtWeight(r.value, { decimals: 1 })} ${Store.unit()}${r.previous > 0 ? ` (was ${Stats.fmtWeight(r.previous, { decimals: 1 })})` : ''}</div>

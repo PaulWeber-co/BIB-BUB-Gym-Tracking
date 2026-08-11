@@ -350,9 +350,9 @@ const UI = (() => {
         const t = TONES[tone] || TONES.info;
         const node = el(`
             <div class="toast">
-                <div class="toast-icon" style="background:${t.bg};color:${t.color}">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
-                        stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
+                <div class="toast-icon" style="color:${t.color}">
+                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
                 </div>
                 <div class="toast-text">
                     <div class="toast-title">${esc(title)}</div>
@@ -458,7 +458,12 @@ const UI = (() => {
             document.body.appendChild(wrap);
             hapticLabel = document.getElementById('ui-haptic-label');
         }
-        try { hapticLabel.click(); } catch (e) { /* ignore */ }
+        try { hapticSwitch().click(); } catch (e) { /* unsupported */ }
+    }
+
+    /** True when the browser exposes a real vibration motor. */
+    function hasVibration() {
+        return typeof navigator.vibrate === 'function';
     }
 
     /**
@@ -505,7 +510,8 @@ const UI = (() => {
             if (!anyOpen) {
                 document.getElementById('tab-bar').hidden = false;
                 lockScroll(false);
-                if (window.App) App.refreshMiniBar();
+                // top level `const` bindings are not window properties, so probe the binding itself
+                if (typeof App !== 'undefined') App.refreshMiniBar();
             }
         }, 340);
     }
@@ -569,7 +575,7 @@ const UI = (() => {
        ────────────────────────────────────────────────────────── */
     return {
         esc, el, sheet, actionSheet, alert: alertBox, confirm, prompt, toast,
-        beep, haptic, unlockAudio, openScreen, closeScreen, screenOpen, closeTop,
+        beep, haptic, hasVibration, unlockAudio, openScreen, closeScreen, screenOpen, closeTop,
         num, download, bindScrollShadow, layers,
     };
 })();

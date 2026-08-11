@@ -62,13 +62,13 @@ const Store = (() => {
 
     /* Jede Muskelgruppe bekommt ihre eigene Farbe für Charts und Avatare. */
     const MUSCLE_COLORS = {
-        Chest: '#FF375F',
-        Back: '#0A84FF',
-        Legs: '#BF5AF2',
-        Shoulders: '#FF9F0A',
-        Arms: '#30D158',
-        Core: '#64D2FF',
-        Other: '#8E8E93',
+        Chest: '#16386E',
+        Back: '#2C68C8',
+        Legs: '#0A2340',
+        Shoulders: '#5B95D6',
+        Arms: '#7FB4DA',
+        Core: '#A9C9E4',
+        Other: '#8A8A82',
     };
 
     /* ──────────────────────────────────────────────────────────
@@ -232,7 +232,10 @@ const Store = (() => {
             return true;
         } catch (e) {
             console.warn('Store: could not write', key, e);
-            if (window.UI) UI.toast({ title: 'Storage full', sub: 'Export a backup in Settings.', tone: 'warn' });
+            // top level `const` bindings are not window properties, so probe the binding itself
+            if (typeof UI !== 'undefined') {
+                UI.toast({ title: 'Storage full', sub: 'Export a backup in Settings.', tone: 'warn' });
+            }
             return false;
         }
     }
@@ -543,6 +546,7 @@ const Store = (() => {
             workouts: read(KEYS.WORKOUTS, []),
             routines: read(KEYS.TEMPLATES, []),
             bodyLog: read(KEYS.BODY, []),
+            proteinLog: read(KEYS.PROTEIN, []),
         };
     }
 
@@ -566,7 +570,7 @@ const Store = (() => {
             throw new Error('Not a valid backup file.');
         }
 
-        const counts = { workouts: 0, routines: 0, exercises: 0, body: 0 };
+        const counts = { workouts: 0, routines: 0, exercises: 0, body: 0, protein: 0 };
 
         const mergeById = (existing, incoming) => {
             const byId = new Map(existing.map(x => [x.id, x]));
@@ -585,10 +589,12 @@ const Store = (() => {
             write(KEYS.TEMPLATES, data.routines || data.templates || []);
             write(KEYS.EXERCISES, data.customExercises || []);
             write(KEYS.BODY, data.bodyLog || []);
+            write(KEYS.PROTEIN, data.proteinLog || []);
             counts.workouts = (data.workouts || []).length;
             counts.routines = (data.routines || data.templates || []).length;
             counts.exercises = (data.customExercises || []).length;
             counts.body = (data.bodyLog || []).length;
+            counts.protein = (data.proteinLog || []).length;
         } else {
             // Zusammenführen (merge)
             let r = mergeById(read(KEYS.WORKOUTS, []), data.workouts);
@@ -607,6 +613,14 @@ const Store = (() => {
                 bodyByDay.set(e.date.slice(0, 10), e);
             });
             write(KEYS.BODY, [...bodyByDay.values()]);
+
+            const proteinByDay = new Map(read(KEYS.PROTEIN, []).map(e => [e.day, e]));
+            (data.proteinLog || []).forEach(e => {
+                if (!e || !e.day) return;
+                if (!proteinByDay.has(e.day)) counts.protein++;
+                proteinByDay.set(e.day, e);
+            });
+            write(KEYS.PROTEIN, [...proteinByDay.values()]);
         }
 
         if (data.settings) {
@@ -693,7 +707,8 @@ const Store = (() => {
         customExercises, allExercises, exercise, exerciseName, searchExercises, saveExercise, deleteExercise,
         workouts, workout, saveWorkout, deleteWorkout,
         routines, routine, saveRoutine, deleteRoutine,
-        bodyLog, addBodyEntry, deleteBodyEntry,
+        bodyLog, addBodyEntry, deleteBodyEntry, latestBodyWeight,
+        proteinLog, proteinOn, setProtein, addProtein, proteinTarget, dayString,
         settings, setSetting,
         activeWorkout, saveActiveWorkout, clearActiveWorkout,
         meta, setMeta,

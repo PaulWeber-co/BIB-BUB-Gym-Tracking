@@ -204,8 +204,8 @@ const Charts = (() => {
         // Ziellinie zeichnen (gestrichelt)
         if (opts.goal) {
             const y = plotH - scale(opts.goal);
-            body += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="rgba(235,235,245,0.3)"
-                stroke-width="1" stroke-dasharray="4 4"/>`;
+            body += `<line x1="0" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}"
+                stroke="${INK}" stroke-width="1" stroke-dasharray="3 3" opacity="0.45"/>`;
         }
 
         // Farbverlauf definieren
@@ -226,24 +226,24 @@ const Charts = (() => {
 
             // Balken als abgerundetes Rechteck
             body += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}"
-                height="${h.toFixed(1)}" rx="${Math.min(radius, h / 2).toFixed(1)}" fill="${fill}"${dim}/>`;
+                height="${h.toFixed(1)}" fill="${fill}"/>`;
 
             // Wert über dem Balken
             if (d.top) {
                 body += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle"
-                    font-size="9" font-weight="700" fill="rgba(235,235,245,0.62)">${esc(d.top)}</text>`;
+                    font-size="9" font-weight="700" fill="${MUTED}">${esc(d.top)}</text>`;
             }
 
             // Label unter dem Balken
             if (opts.labels !== false && d.label) {
-                const strong = d.highlight ? '#fff' : 'rgba(235,235,245,0.45)';
-                body += `<text x="${(x + barW / 2).toFixed(1)}" y="${(plotH + 14).toFixed(1)}" text-anchor="middle"
-                    font-size="10" font-weight="${d.highlight ? 700 : 500}" fill="${strong}">${esc(d.label)}</text>`;
+                body += `<text x="${(x + barW / 2).toFixed(1)}" y="${(plotH + 13).toFixed(1)}" text-anchor="middle"
+                    font-size="9" font-weight="${d.highlight ? 800 : 600}" letter-spacing="0.5"
+                    fill="${d.highlight ? INK : MUTED}">${esc(String(d.label).toUpperCase())}</text>`;
             }
         });
 
         return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img"
-            aria-label="${esc(opts.ariaLabel || 'Bar chart')}"><defs>${defs}</defs>${body}</svg>`;
+            aria-label="${esc(opts.ariaLabel || 'Bar chart')}">${body}</svg>`;
     }
 
     /* ──────────────────────────────────────────────────────────
@@ -270,10 +270,10 @@ const Charts = (() => {
     function line(points, opts = {}) {
         const W = 340;
         const H = opts.height || 170;
-        const padL = 4, padR = 4, padT = 16, padB = 22;
+        const padL = 4, padR = 4, padT = 18, padB = 20;
         const id = uid();
-        const color = opts.color || '#FF4E77';
-        const colorSoft = opts.colorSoft || 'rgba(250,17,79,0.28)';
+        const color = opts.color || BLUE;
+        const soft = opts.colorSoft || 'rgba(44,104,200,0.18)';
 
         if (!points.length) return '';
 
@@ -281,10 +281,10 @@ const Charts = (() => {
         const ys = points.map(p => p.y);
         let min = Math.min(...ys);
         let max = Math.max(...ys);
-        if (max === min) { max = max + Math.max(1, Math.abs(max) * 0.1); min = min - Math.max(1, Math.abs(min) * 0.1); }
+        if (max === min) { max += Math.max(1, Math.abs(max) * 0.1); min -= Math.max(1, Math.abs(min) * 0.1); }
         const span = max - min;
         min = Math.max(0, min - span * 0.15);
-        max = max + span * 0.18;
+        max += span * 0.18;
 
         const plotW = W - padL - padR;
         const plotH = H - padT - padB;
@@ -293,7 +293,6 @@ const Charts = (() => {
         // Koordinaten berechnen: Index → X-Position, Wert → Y-Position
         const px = (i) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
         const py = (v) => padT + plotH - ((v - min) / (max - min)) * plotH;
-
         const coords = points.map((p, i) => [px(i), py(p.y)]);
 
         // Pfad mit Catmull-Rom Splines (sanfte Kurven zwischen Punkten)
@@ -333,8 +332,9 @@ const Charts = (() => {
         coords.forEach((c, i) => {
             const isLast = i === n - 1;
             if (!isLast && i % step !== 0) return;
-            body += `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="${isLast ? 4.6 : 2.8}"
-                fill="${isLast ? color : '#1C1C1E'}" stroke="${color}" stroke-width="${isLast ? 2.4 : 2}"/>`;
+            const size = isLast ? 5 : 3.4;
+            body += `<rect x="${(c[0] - size / 2).toFixed(1)}" y="${(c[1] - size / 2).toFixed(1)}"
+                width="${size}" height="${size}" fill="${isLast ? INK : color}"/>`;
         });
 
         // Letzter Wert als Zahl anzeigen
@@ -342,8 +342,8 @@ const Charts = (() => {
             const last = coords[n - 1];
             const text = opts.formatValue ? opts.formatValue(points[n - 1].y) : String(Math.round(points[n - 1].y));
             const anchor = last[0] > W - 60 ? 'end' : 'middle';
-            body += `<text x="${last[0].toFixed(1)}" y="${Math.max(11, last[1] - 12).toFixed(1)}" text-anchor="${anchor}"
-                font-size="11" font-weight="700" fill="#fff">${esc(text)}</text>`;
+            body += `<text x="${last[0].toFixed(1)}" y="${Math.max(12, last[1] - 11).toFixed(1)}" text-anchor="${anchor}"
+                font-size="11" font-weight="800" fill="${INK}">${esc(text)}</text>`;
         }
 
         // X-Achsen-Labels (Anfang, Mitte, Ende)
@@ -352,15 +352,15 @@ const Charts = (() => {
             [...new Set(idxs)].forEach(i => {
                 const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
                 const x = i === 0 ? 0 : (i === n - 1 ? W : px(i));
-                body += `<text x="${x.toFixed(1)}" y="${H - 5}" text-anchor="${anchor}" font-size="10"
-                    fill="rgba(235,235,245,0.45)">${esc(points[i].label || '')}</text>`;
+                body += `<text x="${x.toFixed(1)}" y="${H - 4}" text-anchor="${anchor}" font-size="9"
+                    font-weight="600" letter-spacing="0.5" fill="${MUTED}">${esc(String(points[i].label || '').toUpperCase())}</text>`;
             });
         }
 
         // Gradient für die Flächenfüllung
         const defs = `<linearGradient id="${id}a" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="${colorSoft}"/>
-            <stop offset="1" stop-color="${colorSoft}" stop-opacity="0"/>
+            <stop offset="0" stop-color="${soft}"/>
+            <stop offset="1" stop-color="${soft}" stop-opacity="0"/>
         </linearGradient>`;
 
         return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img"
@@ -392,10 +392,11 @@ const Charts = (() => {
         const rows = Math.ceil((offset + daysInMonth) / 7);
 
         const W = 340;
-        const cell = W / 7;
-        const ringSize = Math.min(cell - 8, 34);
-        const rowH = ringSize + 18;
-        const H = rows * rowH + 18;
+        const gap = 5;
+        const cell = (W - gap * 6) / 7;
+        const rowH = cell + gap;
+        const headH = 16;
+        const H = headH + rows * rowH;
 
         // Wochentag-Abkürzungen (M, T, W, ...)
         const dayNames = [];
@@ -407,21 +408,21 @@ const Charts = (() => {
         let body = '';
         // Kopfzeile mit Wochentag-Labels
         dayNames.forEach((name, i) => {
-            body += `<text x="${(i * cell + cell / 2).toFixed(1)}" y="10" text-anchor="middle" font-size="10"
-                font-weight="600" fill="rgba(235,235,245,0.34)">${esc(name)}</text>`;
+            body += `<text x="${(i * (cell + gap) + cell / 2).toFixed(1)}" y="8" text-anchor="middle"
+                font-size="9" font-weight="800" letter-spacing="0.8" fill="${MUTED}">${esc(name.toUpperCase())}</text>`;
         });
 
         const today = Stats.startOfDay(new Date());
         for (let d = 1; d <= daysInMonth; d++) {
             const idx = offset + d - 1;
-            const col = idx % 7;
-            const row = Math.floor(idx / 7);
-            const cx = col * cell + cell / 2;
-            const cy = 18 + row * rowH + ringSize / 2;
+            const x = (idx % 7) * (cell + gap);
+            const y = headH + Math.floor(idx / 7) * rowH;
             const date = new Date(year, month, d);
             const info = dayData.get(Stats.dayKey(date));
             const isToday = Stats.sameDay(date, today);
 
+            let fill = TILE;
+            let text = MUTED;
             if (info && info.pct > 0) {
                 // Trainingstag → Ring zeichnen
                 const r = ringSize / 2 - 2;
