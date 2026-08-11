@@ -1,21 +1,38 @@
 /* ============================================================
-   WORKOUT — the live training screen.
-   The running workout is mirrored into localStorage after every
-   change, so a reload (or iOS discarding the tab) never loses it.
+   WORKOUT — Der Live-Trainingsbildschirm
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   workout.js ist das "Herzstück" der App. Hier loggst du dein Training live:
+   - Laufende Stoppuhr (Trainingsdauer)
+   - Übungen hinzufügen, umsortieren, löschen
+   - Sätze loggen: Gewicht, Wiederholungen (oder L/R getrennt bei unilateralen Übungen)
+   - Satz-Typen: Normal, Warm-up (W), Drop-Set (D), bis zum Muskelversagen (F)
+   - Live PR-Erkennung: Toast-Meldung + Vibration bei neuen Rekorden!
+   - Automatischer Pausen-Timer zwischen Sätzen
+   - Langhantel-Scheibenrechner (Plate Calculator)
+   - "Previous"-Spalte: Zeigt, was du beim letzten Mal geschafft hast
+   - Automatisches Speichern im localStorage nach JEDEM Tastendruck
    ============================================================ */
 
 const Workout = (() => {
 
     let current = null;          // { id, date, startedAt, name, routineId, exercises[], rest }
-    let tickTimer = null;
-    let bestCache = {};          // exerciseId -> { e1rm, weight } before this workout
-    let rest = null;             // { endsAt, total }
+    let tickTimer = null;        // Sekundentimer für die laufende Uhr
+    let bestCache = {};          // exerciseId -> { e1rm, weight } vor diesem Workout (für PR-Prüfung)
+    let rest = null;             // { endsAt, total } für den Pausen-Timer
 
     const body = () => document.getElementById('workout-body');
 
-    // ------------------------------------------------------------
-    // Lifecycle
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       LIFECYCLE — Workout starten, wiederherstellen, minimieren
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * start(routineId) — Startet ein neues Workout.
+     * Wenn routineId übergeben wurde → Übungen und Sätze aus der Routine laden.
+     */
     function start(routineId = null) {
         const routine = routineId ? Store.routine(routineId) : null;
 
@@ -49,6 +66,10 @@ const Workout = (() => {
         render();
     }
 
+    /**
+     * restore() — Stellt ein unterbrochenes Workout wieder her
+     * (z.B. nach Reload oder wenn iOS die Seite neu geladen hat).
+     */
     function restore() {
         const saved = Store.activeWorkout();
         if (!saved || !saved.startedAt) return false;
@@ -58,6 +79,7 @@ const Workout = (() => {
         return true;
     }
 
+    /** resume() — Öffnet den Workout-Screen des aktuell laufenden Trainings. */
     function resume() {
         if (!current) return;
         openScreen();
@@ -68,6 +90,7 @@ const Workout = (() => {
     function isActive() { return current !== null; }
     function startedAt() { return current ? current.startedAt : 0; }
 
+    /** primeCache() — Lädt die Rekorde VOR diesem Workout für die Live-PR-Prüfung. */
     function primeCache() {
         bestCache = {};
         if (!current) return;
@@ -76,6 +99,7 @@ const Workout = (() => {
         });
     }
 
+    /** persist() — Spiegelt den aktuellen Stand nach jedem Klick in den localStorage. */
     function persist() {
         if (!current) { Store.clearActiveWorkout(); return; }
         Store.saveActiveWorkout({ ...current, rest });
@@ -91,9 +115,9 @@ const Workout = (() => {
         UI.closeScreen('screen-workout');
     }
 
-    // ------------------------------------------------------------
-    // Clock
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       CLOCK — Stoppuhr des laufenden Workouts
+       ────────────────────────────────────────────────────────── */
     function startTicker() {
         stopTicker();
         tick();
@@ -120,16 +144,21 @@ const Workout = (() => {
         tickRest();
     }
 
-    // ------------------------------------------------------------
-    // Mutations
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       MUTATIONS — Hinzufügen, Bearbeiten & Löschen von Übungen & Sätzen
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * addExerciseObject(exerciseId, overrides) — Fügt eine Übung hinzu.
+     * Kopiert automatisch die Gewichte/Wiederholungen der letzten Einheit,
+     * sodass man meistens nur noch auf das Häkchen tippen muss.
+     */
     function addExerciseObject(exerciseId, overrides = {}) {
         const meta = Store.exercise(exerciseId);
         const last = Stats.lastSession(exerciseId, current.date);
 
         let sets = overrides.sets;
         if (!sets) {
-            // Reproduce the last session so logging is mostly tapping the checkmark
             if (last && last.sets.length) {
                 sets = last.sets.slice(0, 8).map(s => ({
                     weight: Stats.setWeight(s) || '',
@@ -140,8 +169,6 @@ const Workout = (() => {
                     completed: false,
                 }));
             } else {
-                // Bodyweight movements start at your last logged body weight so
-                // that pull-ups and dips contribute a realistic load.
                 const log = Store.bodyLog();
                 const startWeight = meta && meta.category === 'Bodyweight' && log.length
                     ? Math.round(log[log.length - 1].weight * 10) / 10
@@ -210,20 +237,23 @@ const Workout = (() => {
         render();
     }
 
+    /**
+     * toggleSet(i, j) — Hakt einen Satz ab oder hebt das Häkchen auf.
+     * Prüft auf neue Rekorde (PR) und startet automatisch den Pausen-Timer.
+     */
     function toggleSet(i, j) {
         const ex = current.exercises[i];
         const set = ex.sets[j];
         set.completed = !set.completed;
 
         if (set.completed) {
-            if (set.weight === '') set.weight = 0;   // bodyweight work logs as zero load
+            if (set.weight === '') set.weight = 0;
             UI.haptic(14);
             checkRecord(ex, set);
             if (Store.settings().restAuto && set.type !== 'warmup') startRest(ex.restSeconds || Store.settings().restDefault);
         }
 
         persist();
-        // targeted update keeps scroll position and the keyboard state intact
         const row = body().querySelector(`.set-row[data-ex="${i}"][data-set="${j}"]`);
         if (row) {
             row.classList.toggle('is-done', set.completed);
@@ -247,6 +277,11 @@ const Workout = (() => {
         updateExerciseMeta(i);
     }
 
+    /**
+     * checkRecord(ex, set) — Überprüft, ob ein Satz ein neuer persönlicher Rekord ist
+     * (höchstes Gewicht oder bestes geschätztes 1RM).
+     * Zeigt bei Rekord einen Toast-Hinweis und vibriert!
+     */
     function checkRecord(ex, set) {
         const best = bestCache[ex.exerciseId] || { e1rm: 0, weight: 0 };
         const e = Stats.setE1rm(set);
@@ -275,9 +310,9 @@ const Workout = (() => {
         bestCache[ex.exerciseId] = best;
     }
 
-    // ------------------------------------------------------------
-    // Rest timer
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       REST TIMER — Automatischer Pausen-Timer mit Fortschrittsbalken
+       ────────────────────────────────────────────────────────── */
     let restTimer = null;
 
     function startRest(seconds) {
@@ -342,9 +377,9 @@ const Workout = (() => {
         if (progress) progress.style.width = `${Math.max(0, Math.min(100, (left / (rest.total * 1000)) * 100))}%`;
     }
 
-    // ------------------------------------------------------------
-    // Rendering
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       RENDERING — Baut die Live-Workout Benutzeroberfläche auf
+       ────────────────────────────────────────────────────────── */
     function fmtInput(kg) {
         if (kg === '' || kg === null || kg === undefined) return '';
         const v = Store.toDisplay(kg);
@@ -367,10 +402,6 @@ const Workout = (() => {
         return String(workingNumber);
     }
 
-    /**
-     * Pairs today's sets with the matching sets of the last session:
-     * warm-ups line up with warm-ups, working sets with working sets.
-     */
     function previousFor(sets, lastSession) {
         if (!lastSession) return sets.map(() => null);
         const warm = lastSession.sets.filter(s => s.type === 'warmup');
@@ -391,6 +422,10 @@ const Workout = (() => {
         if (node) node.textContent = exerciseMetaText(current.exercises[i]);
     }
 
+    /**
+     * render() — Erzeugt das HTML für alle Übungen und Sätze des Workouts.
+     * Rendert unilaterale Übungen mit zwei Spalten (L und R) und bilateral mit Reps.
+     */
     function render() {
         if (!current) { body().innerHTML = ''; return; }
 
@@ -492,9 +527,9 @@ const Workout = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Menus
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       MENUS & PLATE CALCULATOR
+       ────────────────────────────────────────────────────────── */
     function openExerciseMenu(i) {
         const ex = current.exercises[i];
         const meta = Store.exercise(ex.exerciseId);
@@ -560,9 +595,7 @@ const Workout = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Plate calculator
-    // ------------------------------------------------------------
+    /** openPlates(i) — Öffnet den Hantelscheiben-Rechner für Langhantel-Übungen. */
     function openPlates(i) {
         const ex = current.exercises[i];
         const lastSet = [...ex.sets].reverse().find(s => Stats.setWeight(s) > 0);
@@ -614,9 +647,15 @@ const Workout = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Finish / discard
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       FINISH / DISCARD — Workout beenden oder verwerfen
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * finish() — Schließt das Workout ab.
+     * Nur tatsächlich abgehakte Sätze werden in die dauerhafte Historie übernommen.
+     * Zeigt anschließend den Zusammenfassungs-Bildschirm.
+     */
     async function finish() {
         if (!current) return;
 
@@ -681,6 +720,7 @@ const Workout = (() => {
         setTimeout(() => showSummary(workout, records, wasEmptyStart), 380);
     }
 
+    /** showSummary(workout, records, offerRoutine) — Zeigt den Abschluss-Bildschirm. */
     function showSummary(workout, records, offerRoutine) {
         const t = Stats.workoutTotals(workout);
         const ringsNow = Stats.rings();
@@ -780,9 +820,9 @@ const Workout = (() => {
         App.refreshAll();
     }
 
-    // ------------------------------------------------------------
-    // Events
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Event-Handler
+       ────────────────────────────────────────────────────────── */
     function bind() {
         const container = body();
 
@@ -798,72 +838,62 @@ const Workout = (() => {
                 case 'set-menu': openSetMenu(i, j); break;
                 case 'exercise-menu': openExerciseMenu(i); break;
                 case 'exercise-info': Exercises.openDetail(current.exercises[i].exerciseId); break;
+                case 'add-exercise':
+                    Picker.open({
+                        onPick: (ids) => addExercises(ids),
+                    });
+                    break;
                 case 'plates': openPlates(i); break;
                 case 'rest-now': startRest(current.exercises[i].restSeconds || Store.settings().restDefault); break;
-                case 'add-exercise': Picker.open({ onPick: addExercises }); break;
-                case 'discard': discard(); break;
-                case 'use-prev': {
+                case 'use-prev':
                     const ex = current.exercises[i];
                     const last = Stats.lastSession(ex.exerciseId, current.date);
-                    const prev = previousFor(ex.sets, last)[j];
-                    if (!prev) return;
-                    const set = ex.sets[j];
-                    set.weight = Stats.setWeight(prev);
-                    if (ex.isUnilateral) {
-                        set.repsL = prev.repsL !== undefined ? Number(prev.repsL) : Number(prev.reps) || '';
-                        set.repsR = prev.repsR !== undefined ? Number(prev.repsR) : Number(prev.reps) || '';
-                    } else {
-                        set.reps = Stats.setReps(prev);
+                    const prevSets = previousFor(ex.sets, last);
+                    if (prevSets[j]) {
+                        const set = ex.sets[j];
+                        set.weight = prevSets[j].weight;
+                        set.reps = prevSets[j].reps;
+                        set.repsL = prevSets[j].repsL;
+                        set.repsR = prevSets[j].repsR;
+                        persist(); render();
                     }
-                    persist();
-                    render();
-                    UI.haptic(8);
                     break;
-                }
+                case 'discard': discard(); break;
             }
         });
 
         container.addEventListener('input', (e) => {
             const input = e.target;
-            if (input.classList.contains('set-input')) {
-                setField(Number(input.dataset.ex), Number(input.dataset.set), input.dataset.field, input.value);
-            } else if (input.dataset.act === 'note') {
-                current.exercises[Number(input.dataset.ex)].notes = input.value;
-                input.style.height = 'auto';
-                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+            const i = Number(input.dataset.ex);
+            const j = Number(input.dataset.set);
+            if (input.dataset.act === 'note') {
+                current.exercises[i].notes = input.value;
                 persist();
+                autoSizeNotes();
+            } else if (input.dataset.field) {
+                setField(i, j, input.dataset.field, input.value);
             }
         });
 
-        // Keyboard "next" moves through the set inputs
-        container.addEventListener('keydown', (e) => {
-            if (e.key !== 'Enter' || !e.target.classList.contains('set-input')) return;
-            e.preventDefault();
-            const inputs = [...container.querySelectorAll('.set-input')];
-            const idx = inputs.indexOf(e.target);
-            if (idx >= 0 && idx < inputs.length - 1) inputs[idx + 1].focus();
-            else e.target.blur();
+        container.addEventListener('change', (e) => {
+            const input = e.target;
+            if (input.dataset.field) {
+                const i = Number(input.dataset.ex);
+                const j = Number(input.dataset.set);
+                render();
+            }
         });
 
         document.getElementById('btn-workout-finish').addEventListener('click', finish);
-        document.getElementById('btn-workout-cancel').addEventListener('click', () => {
-            UI.actionSheet({
-                title: 'Workout',
-                actions: [
-                    { label: 'Minimize', plain: true, onSelect: minimize },
-                    { label: 'Discard Workout', destructive: true, onSelect: () => discard() },
-                ],
-            });
-        });
+        document.getElementById('btn-workout-min').addEventListener('click', minimize);
 
-        document.getElementById('btn-rest-skip').addEventListener('click', () => stopRest());
-        document.querySelectorAll('[data-rest-adjust]').forEach(btn => {
-            btn.addEventListener('click', () => adjustRest(Number(btn.dataset.restAdjust)));
-        });
+        document.getElementById('rest-btn-plus').addEventListener('click', () => adjustRest(15));
+        document.getElementById('rest-btn-minus').addEventListener('click', () => adjustRest(-15));
+        document.getElementById('rest-btn-skip').addEventListener('click', () => stopRest());
     }
 
     return {
-        start, restore, resume, isActive, startedAt, bind, render, tick,
-        minimize, finish, discard, addExercises,
+        start, restore, resume, isActive, startedAt, tick,
+        addExercises, finish, discard, minimize, bind,
     };
 })();

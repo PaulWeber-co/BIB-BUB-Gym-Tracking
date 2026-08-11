@@ -1,6 +1,13 @@
 /* ============================================================
-   TRENDS — long range progress: training load, per exercise
-   progression and body weight.
+   TRENDS — Langzeit-Fortschritt, Übungs-Verlauf und Körpergewicht
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   Zeigt die Statistiken im "Trends"-Tab:
+   1. Overview Tab: 12-Wochen-Trainingslast, Einheiten/Woche, Muskelverteilung, All-Time-Stats
+   2. Exercise Tab: Liniendiagramm für 1RM/Gewicht/Volumen/Wdh. einer ausgewählten Übung
+   3. Body Tab: Körpergewicht-Verlauf mit Liniendiagramm und Log-Historie
    ============================================================ */
 
 const Trends = (() => {
@@ -12,6 +19,7 @@ const Trends = (() => {
 
     const body = () => document.getElementById('trends-body');
 
+    /** render() — Erzeugt die Benutzeroberfläche des Trends-Tabs. */
     function render() {
         const parts = [`
             <div class="segmented" data-role="tab">
@@ -28,9 +36,9 @@ const Trends = (() => {
         bindDynamic();
     }
 
-    // ------------------------------------------------------------
-    // Overview
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       OVERVIEW — Allgemeine Trainingslast & Muskelverteilung
+       ────────────────────────────────────────────────────────── */
     function renderOverview() {
         const weeks = Stats.weeklySeries(12);
         const all = Stats.allTime();
@@ -50,7 +58,6 @@ const Trends = (() => {
             label: w.date.toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' }).replace(/\.$/, ''),
             highlight: i === weeks.length - 1,
         }));
-        // only label every other week so the axis stays readable
         volumeBars.forEach((b, i) => { if (i % 2 !== 0 && i !== volumeBars.length - 1) b.label = ''; });
 
         const workoutBars = weeks.map((w, i) => ({
@@ -133,9 +140,9 @@ const Trends = (() => {
             </div>`;
     }
 
-    // ------------------------------------------------------------
-    // Per exercise
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       EXERCISE — Einzelne Übungs-Entwicklung über die Zeit
+       ────────────────────────────────────────────────────────── */
     function mostTrainedId() {
         const counts = {};
         Store.workouts().forEach(w => (w.exercises || []).forEach(ex => {
@@ -159,8 +166,8 @@ const Trends = (() => {
         const METRICS = {
             weight: { label: 'Weight', title: 'Top set weight', pick: s => s.maxWeight, fmt: v => Stats.fmtWeight(v), unit: Store.unit() },
             volume: { label: 'Volume', title: 'Session volume', pick: s => s.volume, fmt: v => Stats.fmtVolume(v), unit: Store.unit() },
-            e1rm: { label: '1RM', title: 'Estimated 1RM', pick: s => s.e1rm, fmt: v => Stats.fmtWeight(v, { decimals: 1 }), unit: Store.unit() },
-            reps: { label: 'Reps', title: 'Total reps', pick: s => s.reps, fmt: v => String(Math.round(v)), unit: '' },
+            e1rm:   { label: '1RM', title: 'Estimated 1RM', pick: s => s.e1rm, fmt: v => Stats.fmtWeight(v, { decimals: 1 }), unit: Store.unit() },
+            reps:   { label: 'Reps', title: 'Total reps', pick: s => s.reps, fmt: v => String(Math.round(v)), unit: '' },
         };
         const m = METRICS[metric];
 
@@ -245,9 +252,9 @@ const Trends = (() => {
             </div>`;
     }
 
-    // ------------------------------------------------------------
-    // Body weight
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       BODY WEIGHT — Körpergewicht-Tracking & Trend
+       ────────────────────────────────────────────────────────── */
     function renderBody() {
         const log = Store.bodyLog();
         const trend = Stats.bodyTrend();
@@ -318,9 +325,9 @@ const Trends = (() => {
         UI.toast({ title: 'Body weight saved', tone: 'success' });
     }
 
-    // ------------------------------------------------------------
-    // Events
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Event-Listener
+       ────────────────────────────────────────────────────────── */
     function bindDynamic() {
         const root = body();
 

@@ -1,18 +1,35 @@
 /* ============================================================
-   SUMMARY — the screen you land on: weekly rings, the week at a
-   glance, quick start, records and recent sessions.
+   SUMMARY — Der Dashboard-Bildschirm (Home-Screen der App)
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   summary.js baut die Startseite der App ("Summary"-Tab) auf:
+   1. Drei Activity Rings (Volumen, Workouts, Sätze) für Wochenziele
+   2. "This Week" Streifen mit Tages-Ringen
+   3. Quick-Start (Start Workout, Resume Workout oder Routinen-Chips)
+   4. Kacheln (Goal streak, Tage seit letztem Workout, Volume vs. letzte Woche)
+   5. 14-Tage Volumen-Balkendiagramm
+   6. Neue persönliche Rekorde (PRs)
+   7. Die 3 neuesten Workouts
    ============================================================ */
 
 const Summary = (() => {
 
     const body = () => document.getElementById('summary-body');
 
+    /**
+     * render() — Erzeugt den gesamten Inhalt des Home-Screens.
+     * Baut aus den berechneten Zahlen von Stats und den SVG-Diagrammen
+     * von Charts ein responsives HTML-Dashboard auf.
+     */
     function render() {
         const s = Store.settings();
         const r = Stats.rings();
         const days = Stats.weekDays();
         const all = Stats.allTime();
 
+        // Datum im Header setzen (z.B. "Monday, 10 August")
         document.getElementById('summary-date').textContent =
             new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -21,7 +38,7 @@ const Summary = (() => {
 
         const parts = [];
 
-        // ---- rings ----
+        // 1. ---- ACTIVITY RINGS ----
         parts.push(`
             <div class="card rings-card">
                 <div class="rings-figure">${Charts.rings([r.volume.pct, r.workouts.pct, r.sets.pct], { size: 128, stroke: 12.5 })}</div>
@@ -41,7 +58,7 @@ const Summary = (() => {
                 </div>
             </div>`);
 
-        // ---- week strip ----
+        // 2. ---- THIS WEEK STRIP ----
         parts.push(`
             <div class="card">
                 <div class="card-head" style="margin-bottom:10px">
@@ -63,7 +80,7 @@ const Summary = (() => {
                 </div>
             </div>`);
 
-        // ---- start / resume ----
+        // 3. ---- QUICK START / RESUME ----
         if (Workout.isActive()) {
             parts.push(`
                 <button class="card card-tap row-between" data-act="resume" style="width:100%;text-align:left;border:1px solid rgba(123,232,0,.35)">
@@ -91,7 +108,7 @@ const Summary = (() => {
             }
         }
 
-        // ---- tiles ----
+        // 4. ---- STATS TILES ----
         const streak = Stats.weekStreak();
         const sinceLast = Stats.daysSinceLastWorkout();
         const weeks = Stats.weeklySeries(2);
@@ -125,7 +142,7 @@ const Summary = (() => {
                 </div>
             </div>`);
 
-        // ---- 14 day volume ----
+        // 5. ---- 14 DAY VOLUME CHART ----
         if (all.workouts > 0) {
             const daily = Stats.dailySeries(14);
             const bars = daily.map((d, i) => ({
@@ -150,7 +167,7 @@ const Summary = (() => {
                 </div>`);
         }
 
-        // ---- records ----
+        // 6. ---- RECENT RECORDS ----
         const records = Stats.recentRecords(4);
         if (records.length) {
             parts.push(`
@@ -168,7 +185,7 @@ const Summary = (() => {
                 </div>`);
         }
 
-        // ---- recent workouts ----
+        // 7. ---- RECENT WORKOUTS ----
         const recent = Store.workouts().slice(0, 3);
         parts.push(`
             <div class="section-title">
@@ -202,6 +219,9 @@ const Summary = (() => {
         body().innerHTML = parts.join('');
     }
 
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Klick-Handler für Schnellstarts & Navigationslinks
+       ────────────────────────────────────────────────────────── */
     function bind() {
         body().addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');

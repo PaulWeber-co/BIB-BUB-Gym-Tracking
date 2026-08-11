@@ -1,6 +1,16 @@
 /* ============================================================
-   SETTINGS — goals, units, timers, backup and the Apple Health
-   hand-off via the Shortcuts URL scheme.
+   SETTINGS — Einstellungen, Wochenziele, Einheiten, Backup & Health
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   Verwaltet das Einstellungen-Sheet:
+   1. Wochenziele (Volumen, Workouts, Arbeitssätze)
+   2. Einheiten-Umschaltung (kg / lb)
+   3. Trainings-Einstellungen (Pause-Timer, Ton, Vibration, Hantelstangen-Gewicht)
+   4. Apple Health Hand-off Erklärung & Shortcut-Verknüpfung
+   5. Daten-Backup (JSON Export / Import) und Daten löschen
+   6. App zur Hülle / Home-Screen hinzufügen Erklärung
    ============================================================ */
 
 const Settings = (() => {
@@ -16,6 +26,7 @@ const Settings = (() => {
         });
     }
 
+    /** render(el, api) — Baut die Einstellungen-Benutzeroberfläche auf. */
     function render(el, api) {
         const s = Store.settings();
         const bytes = Store.storageSize();
@@ -161,6 +172,9 @@ const Settings = (() => {
             </div>`;
     }
 
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Interaktionen in den Einstellungen
+       ────────────────────────────────────────────────────────── */
     function bind(el, api) {
         const rerender = () => { render(el, api); App.refreshAll(); };
 
@@ -262,9 +276,9 @@ const Settings = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Backup
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       BACKUP & HEALTH
+       ────────────────────────────────────────────────────────── */
     function exportBackup() {
         const data = Store.exportAll();
         const stamp = new Date().toISOString().slice(0, 10);
@@ -306,9 +320,6 @@ const Settings = (() => {
         input.click();
     }
 
-    // ------------------------------------------------------------
-    // Apple Health
-    // ------------------------------------------------------------
     function healthInfo() {
         UI.sheet({
             title: 'Apple Health',

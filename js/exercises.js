@@ -1,20 +1,37 @@
 /* ============================================================
-   EXERCISES — the library, the create/edit form and the
-   per exercise detail screen with history and records.
+   EXERCISES — Übungsbibliothek, Editor und Übungs-Detailansicht
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   Verwaltet die Übungs-Bibliothek ("Exercises"-Tab):
+   1. render(): Zeigt die durchsuchbare Übungsliste mit Muskel-Filter
+   2. openEditor(): Sheet zum Erstellen/Bearbeiten eigener Übungen
+   3. openDetail(): Detailseite einer Übung mit 1RM-Graph & Historie
+   4. detailMenu(): Optionen (Trends anzeigen, Bearbeiten, Löschen)
    ============================================================ */
 
 const Exercises = (() => {
 
-    let query = '';
-    let muscle = '';
-    let detailId = null;
+    let query = '';       // Aktueller Suchtext
+    let muscle = '';      // Aktueller Muskelgruppen-Filter
+    let detailId = null;  // ID der Übung, deren Detailansicht offen ist
 
     const body = () => document.getElementById('exercises-body');
     const detailBody = () => document.getElementById('exercise-detail-body');
 
-    // ------------------------------------------------------------
-    // Library
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       LIBRARY — Die Übungsliste im "Exercises"-Tab
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * render() — Baut den Exercises-Tab auf.
+     *
+     * ABLAUF:
+     * 1. Alle trainierten Übungs-IDs ermitteln (für "trained" Badge)
+     * 2. Suchfeld und Muskelgruppen-Chips rendern
+     * 3. Übungen filtern und alphabetisch geordnet mit Buchstaben-Headern (A, B, C...) anzeigen
+     */
     function render() {
         const results = Store.searchExercises(query, muscle);
         const trainedCount = new Set();
@@ -61,6 +78,10 @@ const Exercises = (() => {
         bindDynamic();
     }
 
+    /**
+     * bindDynamic() — Verbindet Suchfeld und Muskel-Chips mit Event-Listenern.
+     * Beim Eintippen im Suchfeld bleibt die Cursor-Position erhalten.
+     */
     function bindDynamic() {
         const search = body().querySelector('[data-role="search"]');
         if (search) {
@@ -77,10 +98,20 @@ const Exercises = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Create / edit
-    // ------------------------------------------------------------
-    /** onDone receives the saved exercise, or null when cancelled. */
+    /* ──────────────────────────────────────────────────────────
+       CREATE / EDIT — Übung erstellen oder bearbeiten
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * openEditor(id, onDone, prefillName) — Öffnet ein Sheet zum Erstellen/Editieren einer Übung.
+     *
+     * FELDER:
+     * - Name (z.B. "Cable Lateral Raise")
+     * - Muscle Group (Chest, Back, Legs, Shoulders, Arms, Core)
+     * - Equipment Category (Barbell, Dumbbell, Machine, Cable, Bodyweight, Other)
+     * - Unilateral (Toggle für L/R getrenntes Tracking)
+     * - Barbell exercise (Toggle für Hantelscheiben-Rechner)
+     */
     function openEditor(id = null, onDone = null, prefillName = '') {
         const existing = id ? Store.exercise(id) : null;
 
@@ -160,9 +191,16 @@ const Exercises = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Detail
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       DETAIL — Vollbild-Detailseite einer Übung
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * openDetail(id) — Öffnet die Detailseite einer Übung mit:
+     * - Bestleistungen (Best est. 1RM, Heaviest set, Best session, Sessions count)
+     * - 1RM-Liniendiagramm über alle absolvierten Sessions
+     * - Historie aller früheren Einheiten mit dieser Übung
+     */
     function openDetail(id) {
         const ex = Store.exercise(id);
         if (!ex) return;
@@ -242,11 +280,13 @@ const Exercises = (() => {
         UI.openScreen('screen-exercise-detail');
     }
 
+    /** closeDetail() — Schließt den Detailansicht-Screen. */
     function closeDetail() {
         detailId = null;
         UI.closeScreen('screen-exercise-detail');
     }
 
+    /** detailMenu() — ActionSheet für Zusatzaktionen (Trends, Editieren, Löschen). */
     function detailMenu() {
         const ex = Store.exercise(detailId);
         if (!ex) return;
@@ -276,9 +316,9 @@ const Exercises = (() => {
         UI.actionSheet({ title: ex.name, actions });
     }
 
-    // ------------------------------------------------------------
-    // Events
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Event-Binding für Clicks
+       ────────────────────────────────────────────────────────── */
     function bind() {
         body().addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');

@@ -1,17 +1,31 @@
 /* ============================================================
-   ROUTINES — reusable workout templates and their editor.
+   ROUTINES — Wiederverwendbare Trainingsvorlagen und Routine-Editor
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   Verwaltet Trainingsroutinen ("Routines"-Tab):
+   - Routinen anzeigen, neu erstellen, bearbeiten, duplizieren, löschen
+   - Routine starten (öffnet das Workout mit voreingestellten Übungen & Sätzen)
+   - "Save as Routine": Ein abgeschlossenes Workout als Vorlage speichern
+   - Routine-Editor zum Einstellen von Zielgewichten, Zielwiederholungen & Unilateral-Flag
    ============================================================ */
 
 const Routines = (() => {
 
-    let draft = null;   // routine being edited
+    let draft = null;   // Die Routine, die gerade im Editor bearbeitet wird
 
     const body = () => document.getElementById('routines-body');
     const editorBody = () => document.getElementById('routine-editor-body');
 
-    // ------------------------------------------------------------
-    // Tab
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       TAB — Routinen-Liste im "Routines"-Tab
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * render() — Baut den Routinen-Tab auf.
+     * Zeigt den "Start Empty Workout"-Button oben und danach alle Routinen.
+     */
     function render() {
         const routines = Store.routines();
         const parts = [];
@@ -67,11 +81,13 @@ const Routines = (() => {
         body().innerHTML = parts.join('');
     }
 
+    /** lastPerformed(routineId) — Wann wurde diese Routine zuletzt absolviert? */
     function lastPerformed(routineId) {
         const w = Store.workouts().find(x => x.routineId === routineId);
         return w ? w.date : null;
     }
 
+    /** startRoutine(id) — Startet ein Workout basierend auf der Routine. */
     async function startRoutine(id) {
         if (Workout.isActive()) {
             const ok = await UI.confirm({
@@ -85,6 +101,7 @@ const Routines = (() => {
         Workout.start(id);
     }
 
+    /** openMenu(id) — ActionSheet mit Optionen für eine Routine (Start, Edit, Duplicate, Delete). */
     function openMenu(id) {
         const r = Store.routine(id);
         if (!r) return;
@@ -116,9 +133,11 @@ const Routines = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Editor
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       EDITOR — Vollbild-Screen zum Bearbeiten von Routinen
+       ────────────────────────────────────────────────────────── */
+
+    /** openEditor(id) — Öffnet den Routine-Editor. */
     function openEditor(id = null) {
         if (id) {
             const existing = Store.routine(id);
@@ -136,6 +155,7 @@ const Routines = (() => {
         UI.closeScreen('screen-routine-editor');
     }
 
+    /** renderEditor() — Baut das HTML des Routine-Editors auf. */
     function renderEditor() {
         if (!draft) return;
         const parts = [];
@@ -238,6 +258,7 @@ const Routines = (() => {
         renderEditor();
     }
 
+    /** save() — Speichert die bearbeitete Routine im Store. */
     function save() {
         if (!draft) return;
         const name = (draft.name || '').trim();
@@ -257,6 +278,7 @@ const Routines = (() => {
         UI.toast({ title: 'Routine saved', tone: 'success' });
     }
 
+    /** createFromWorkout(workout, name) — Erstellt eine neue Routine direkt aus einem abgeschlossenen Workout. */
     function createFromWorkout(workout, name) {
         const routine = {
             name,
@@ -276,9 +298,9 @@ const Routines = (() => {
         return Store.saveRoutine(routine);
     }
 
-    // ------------------------------------------------------------
-    // Events
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Klick & Eingabe-Handling
+       ────────────────────────────────────────────────────────── */
     function bind() {
         body().addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');
