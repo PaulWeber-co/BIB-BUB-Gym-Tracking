@@ -886,11 +886,11 @@ const Workout = (() => {
         });
 
         document.getElementById('btn-workout-finish').addEventListener('click', finish);
-        document.getElementById('btn-workout-min').addEventListener('click', minimize);
+        document.getElementById('btn-workout-cancel').addEventListener('click', minimize);
 
-        document.getElementById('rest-btn-plus').addEventListener('click', () => adjustRest(15));
-        document.getElementById('rest-btn-minus').addEventListener('click', () => adjustRest(-15));
-        document.getElementById('rest-btn-skip').addEventListener('click', () => stopRest());
+        document.querySelector('[data-rest-adjust="15"]').addEventListener('click', () => adjustRest(15));
+        document.querySelector('[data-rest-adjust="-15"]').addEventListener('click', () => adjustRest(-15));
+        document.getElementById('btn-rest-skip').addEventListener('click', () => stopRest());
     }
 
     return {
