@@ -68,7 +68,7 @@ const App = (() => {
 
         // Gleicher Tab? → Nur refresh + smooth scroll nach oben
         if (name === activeTab) {
-            VIEWS[name].render();
+            renderView(name);
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
@@ -88,7 +88,7 @@ const App = (() => {
         });
 
         // Inhalt des neuen Tabs rendern
-        VIEWS[name].render();
+        renderView(name);
 
         // Zur gespeicherten Scroll-Position springen (oder ganz oben)
         window.scrollTo(0, scrollPos[name] || 0);
@@ -98,12 +98,70 @@ const App = (() => {
     }
 
     /**
+     * renderView(name) — Zeichnet einen Tab und fängt Fehler dabei ab.
+     *
+     * WARUM DER TRY/CATCH?
+     * Wirft eine render()-Funktion einen Fehler, bricht das Zeichnen
+     * mittendrin ab und der Bildschirm bleibt leer — ohne jeden Hinweis,
+     * was los ist. Genau das ist nach einem Release passiert, als der
+     * Browser noch alte Skripte im Cache hatte. Statt einer weißen Seite
+     * gibt es jetzt eine Meldung und einen Knopf, der die App sauber neu lädt.
+     */
+    function renderView(name) {
+        try {
+            VIEWS[name].render();
+        } catch (err) {
+            console.error('Render failed for', name, err);
+            showRenderError(name, err);
+        }
+    }
+
+    /** Zeigt die Fehlermeldung samt Ausweg im betroffenen Tab an. */
+    function showRenderError(name, err) {
+        const host = document.getElementById(VIEWS[name].id).querySelector('.view-body');
+        if (!host) return;
+        host.innerHTML = `
+            <div class="card" style="margin-top:16px">
+                <div class="empty">
+                    <strong>Something went wrong</strong>
+                    This screen could not be drawn. Reloading usually fixes it — your training
+                    data is untouched.
+                </div>
+                <button class="btn btn-fill btn-block" data-act="hard-reload">Reload App</button>
+                <p class="tiny muted mt-8" style="word-break:break-word">${UI.esc(String(err && err.message || err))}</p>
+            </div>`;
+        const btn = host.querySelector('[data-act="hard-reload"]');
+        if (btn) btn.addEventListener('click', hardReload);
+    }
+
+    /**
+     * hardReload() — Wirft alle Caches und Service Worker weg und lädt neu.
+     * Der Notausgang, wenn doch einmal alte und neue Dateien zusammenkommen.
+     * Die Trainingsdaten liegen im localStorage und bleiben unberührt.
+     */
+    async function hardReload() {
+        try {
+            if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map(r => r.unregister()));
+            }
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(k => caches.delete(k)));
+            }
+        } catch (e) {
+            console.warn('Cache cleanup failed', e);
+        }
+        location.reload();
+    }
+
+    /**
      * refreshAll() — Rendert den aktuellen Tab neu.
      * Wird aufgerufen, wenn sich Daten geändert haben
      * (z.B. nach einem Workout-Finish oder Routine-Speichern).
      */
     function refreshAll() {
-        VIEWS[activeTab].render();
+        renderView(activeTab);
         refreshMiniBar();
     }
 
@@ -155,13 +213,7 @@ const App = (() => {
        ────────────────────────────────────────────────────────── */
 
     function init() {
-        // Theme beim Start anwenden (Dark / Light / System)
-        Store.applyTheme();
-        if (window.matchMedia) {
-            window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-                if (Store.settings().theme === 'system') Store.applyTheme('system');
-            });
-        }
+        // Das Theme setzt sich selbst in theme.js, schon vor dem ersten Zeichnen.
 
         // ---- Schritt 1: Alle Module "binden" (Event-Listener setzen) ----
         // Jedes Modul hat eine bind()-Funktion, die Klick-Handler
@@ -177,7 +229,7 @@ const App = (() => {
         // Wenn ein Tab-Button geklickt wird → zu diesem Tab wechseln
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
-                UI.haptic(6);              // Kurze Vibration als Feedback
+                UI.haptic('tap');              // Kurze Vibration als Feedback
                 showTab(tab.dataset.tab);  // data-tab="summary" usw.
             });
         });
@@ -200,7 +252,7 @@ const App = (() => {
         // geben wir eine kurze körperliche Vibration als Rückmeldung.
         document.addEventListener('pointerdown', (e) => {
             const btn = e.target.closest('button, .btn, .card-tap, .chip, .list-row, .bar-btn, .action-item, [data-act]');
-            if (btn) UI.haptic(6);
+            if (btn) UI.haptic('tap');
         }, { passive: true });
 
         // ---- Schritt 6: Laufendes Workout wiederherstellen ----
@@ -266,8 +318,24 @@ const App = (() => {
     function registerServiceWorker() {
         if (!('serviceWorker' in navigator)) return;  // Browser unterstützt es nicht
         if (location.protocol === 'file:') return;     // Lokale Datei, kein Server
+
+        // Übernimmt ein neuer Service Worker, läuft im Tab womöglich noch Code
+        // aus der vorigen Version. Einmal neu laden, damit nie altes und neues
+        // JavaScript zusammen laufen. Das sessionStorage-Flag verhindert eine
+        // Endlosschleife aus Reloads.
+        let reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (reloading) return;
+            if (sessionStorage.getItem('gym_sw_reloaded') === '1') return;
+            reloading = true;
+            sessionStorage.setItem('gym_sw_reloaded', '1');
+            location.reload();
+        });
+
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').catch(() => { /* optional */ });
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => reg.update())
+                .catch(() => { /* optional */ });
         });
     }
 
@@ -308,10 +376,34 @@ const App = (() => {
        (aber bevor Bilder geladen sind). Das ist der früheste sichere
        Zeitpunkt, um auf DOM-Elemente zuzugreifen.
        ────────────────────────────────────────────────────────── */
-    document.addEventListener('DOMContentLoaded', init);
+    /** Auch ein Fehler beim Start darf nicht in einer leeren Seite enden. */
+    function boot() {
+        try {
+            init();
+        } catch (err) {
+            console.error('Startup failed', err);
+            const host = document.getElementById('summary-body');
+            if (host) {
+                host.innerHTML = `
+                    <div class="card" style="margin-top:16px">
+                        <div class="empty">
+                            <strong>App could not start</strong>
+                            Reloading clears out cached files from an older version. Your training
+                            data stays where it is.
+                        </div>
+                        <button class="btn btn-fill btn-block" id="btn-boot-reload">Reload App</button>
+                        <p class="tiny muted mt-8" style="word-break:break-word">${String(err && err.message || err)}</p>
+                    </div>`;
+                const btn = document.getElementById('btn-boot-reload');
+                if (btn) btn.addEventListener('click', hardReload);
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', boot);
 
     /* ──────────────────────────────────────────────────────────
        PUBLIC API — Was andere Module von App verwenden können.
        ────────────────────────────────────────────────────────── */
-    return { showTab, refreshAll, refreshMiniBar, startEmptyWorkout };
+    return { showTab, refreshAll, refreshMiniBar, startEmptyWorkout, hardReload };
 })();

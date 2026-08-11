@@ -240,7 +240,7 @@ const History = (() => {
                     ${muscles.map(([name, vol]) => `
                         <div class="dist-row">
                             <div class="dist-name">${UI.esc(name)}</div>
-                            <div class="dist-track"><div class="dist-fill" style="width:${((vol / totalMuscle) * 100).toFixed(1)}%;background:${Store.MUSCLE_COLORS[name] || Store.MUSCLE_COLORS.Other}"></div></div>
+                            <div class="dist-track"><div class="dist-fill" style="width:${((vol / totalMuscle) * 100).toFixed(1)}%;background:${Store.muscleColor(name)}"></div></div>
                             <div class="dist-value">${Math.round((vol / totalMuscle) * 100)}%</div>
                         </div>`).join('')}
                 </div>`;

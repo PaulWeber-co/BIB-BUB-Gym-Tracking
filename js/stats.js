@@ -257,16 +257,17 @@ const Stats = (() => {
     }
 
     /**
-     * rings() — Berechnet den Fortschritt für die drei "Activity Rings"
-     * auf dem Summary-Screen:
-     * 1. Roter Ring: Volumen (Gewicht × Wdh) vs. Wochenziel
-     * 2. Grüner Ring: Workouts diese Woche vs. Ziel
-     * 3. Blauer Ring: Arbeitssätze vs. Ziel
+     * goals() — Der Fortschritt für die drei Bänder auf dem Summary-Screen:
+     * 1. Protein heute vs. Tagesziel (aus dem Körpergewicht berechnet)
+     * 2. Workouts diese Woche vs. Ziel
+     * 3. Arbeitssätze diese Woche vs. Ziel
      *
-     * Jeder Ring hat: value (aktuell), goal (Ziel), pct (Prozent).
-     * pct = 0.75 bedeutet "75% des Ziels erreicht".
+     * Jedes Ziel hat: value (aktuell), goal (Ziel), pct (Anteil).
+     * pct = 0.75 bedeutet "75 % des Ziels erreicht".
+     * Beim Protein kann goal null sein — dann ist noch kein
+     * Körpergewicht eingetragen.
      */
-    function rings(anchor = new Date()) {
+    function goals(anchor = new Date()) {
         const s = Store.settings();
         const t = weekTotals(anchor);
         const proteinGoal = Store.proteinTarget();
@@ -575,6 +576,53 @@ const Stats = (() => {
             });
         });
         return out.slice(0, limit);
+    }
+
+    /* ──────────────────────────────────────────────────────────
+       PROTEIN — Auswertung der täglichen Eiweißaufnahme
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * proteinSeries(days) — Ein Eintrag pro Tag der letzten n Tage,
+     * ältester zuerst. Tage ohne Eintrag kommen mit 0 Gramm, damit
+     * das Balkendiagramm eine lückenlose Zeitachse hat.
+     */
+    function proteinSeries(days = 14) {
+        const log = new Map(Store.proteinLog().map(e => [e.day, Number(e.grams) || 0]));
+        const today = startOfDay(new Date());
+        const out = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const date = addDays(today, -i);
+            out.push({ date, grams: log.get(Store.dayString(date)) || 0 });
+        }
+        return out;
+    }
+
+    /**
+     * proteinStreak() — Wie viele Tage am Stück wurde das Ziel erreicht?
+     * Der heutige Tag zählt nicht als Abbruch, solange er noch läuft —
+     * sonst stünde die Serie jeden Morgen auf 0.
+     */
+    function proteinStreak() {
+        const target = Store.proteinTarget();
+        if (!target) return 0;
+        const log = new Map(Store.proteinLog().map(e => [e.day, Number(e.grams) || 0]));
+        const today = startOfDay(new Date());
+        let streak = 0;
+        for (let i = 0; i < 400; i++) {
+            const grams = log.get(Store.dayString(addDays(today, -i))) || 0;
+            if (grams >= target) streak++;
+            else if (i === 0) continue;      // heute kann noch voll werden
+            else break;
+        }
+        return streak;
+    }
+
+    /** proteinAverage(days) — Durchschnitt über die Tage mit Eintrag. */
+    function proteinAverage(days = 7) {
+        const series = proteinSeries(days).filter(d => d.grams > 0);
+        if (series.length === 0) return 0;
+        return series.reduce((sum, d) => sum + d.grams, 0) / series.length;
     }
 
     /* ──────────────────────────────────────────────────────────

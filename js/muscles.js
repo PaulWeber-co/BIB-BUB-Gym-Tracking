@@ -68,9 +68,12 @@ const Muscles = (() => {
        Safari versions render them too. */
     function tile(exercise, size, className) {
         const group = exercise ? exercise.muscleGroup : '';
-        const color = Store.MUSCLE_COLORS[group] || Store.MUSCLE_COLORS.Other;
-        return `<div class="${className}" style="background:${color}1A;border-color:${color}44">
-            ${figure(group, { size, active: color, ghost: 'rgba(0,0,0,0.20)' })}
+        const color = Store.muscleColor(group);
+        const ghost = typeof getComputedStyle === 'function'
+            ? (getComputedStyle(document.documentElement).getPropertyValue('--figure-ghost').trim() || 'rgba(0,0,0,0.20)')
+            : 'rgba(0,0,0,0.20)';
+        return `<div class="${className}" style="background:${color}22;border-color:${color}4D">
+            ${figure(group, { size, active: color, ghost })}
         </div>`;
     }
 

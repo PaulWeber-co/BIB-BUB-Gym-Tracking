@@ -1,40 +1,38 @@
-/* Service worker — makes the app usable without a connection.
-   Bump CACHE when shipping new assets. */
+/* Service worker — offline support.
 
-const CACHE = 'gym-v3.0.0';
+   Assets are fetched network first. A cache-first strategy once shipped a
+   fresh index.html together with stale scripts, which left the app blank;
+   the network is now always asked first and the cache is only the offline
+   fallback. Asset URLs additionally carry ?v=VERSION, so a cache from an
+   older release can never answer a request from a newer one.
+
+   VERSION must match the ?v= query in index.html. */
+
+const VERSION = '3.1.0';
+const CACHE = `gym-${VERSION}`;
 
 const ASSETS = [
     './',
     'index.html',
-    'css/style.css',
-    'js/store.js',
-    'js/stats.js',
-    'js/charts.js',
-    'js/muscles.js',
-    'js/ui.js',
-    'js/nutrition.js',
-    'js/picker.js',
-    'js/workout.js',
-    'js/routines.js',
-    'js/history.js',
-    'js/trends.js',
-    'js/exercises.js',
-    'js/settings.js',
-    'js/summary.js',
-    'js/app.js',
     'manifest.webmanifest',
     'icons/icon.svg',
     'icons/icon-180.png',
     'icons/icon-192.png',
     'icons/icon-512.png',
+    `css/style.css?v=${VERSION}`,
+    ...[
+        'theme', 'store', 'stats', 'charts', 'muscles', 'ui', 'nutrition', 'picker',
+        'workout', 'routines', 'history', 'trends', 'exercises', 'settings',
+        'summary', 'app',
+    ].map(name => `js/${name}.js?v=${VERSION}`),
 ];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE)
             .then(cache => cache.addAll(ASSETS))
+            .catch(() => { /* a missing asset must not block the update */ })
             .then(() => self.skipWaiting())
-            .catch(() => self.skipWaiting())
     );
 });
 
@@ -46,40 +44,31 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+self.addEventListener('message', (event) => {
+    if (event.data === 'skip-waiting') self.skipWaiting();
+});
+
 self.addEventListener('fetch', (event) => {
     const request = event.request;
     if (request.method !== 'GET') return;
+    if (new URL(request.url).origin !== self.location.origin) return;
 
-    const url = new URL(request.url);
-    if (url.origin !== self.location.origin) return;
-
-    // Navigations: network first so a deploy is picked up, cache as fallback.
-    if (request.mode === 'navigate') {
-        event.respondWith(
-            fetch(request)
-                .then(response => {
-                    const copy = response.clone();
-                    caches.open(CACHE).then(cache => cache.put('index.html', copy));
-                    return response;
-                })
-                .catch(() => caches.match('index.html').then(r => r || caches.match('./')))
-        );
-        return;
-    }
-
-    // Assets: cache first, refresh in the background.
     event.respondWith(
-        caches.match(request).then(cached => {
-            const network = fetch(request)
-                .then(response => {
-                    if (response && response.status === 200) {
-                        const copy = response.clone();
-                        caches.open(CACHE).then(cache => cache.put(request, copy));
-                    }
-                    return response;
-                })
-                .catch(() => cached);
-            return cached || network;
-        })
+        fetch(request)
+            .then(response => {
+                if (response && response.status === 200 && response.type === 'basic') {
+                    const copy = response.clone();
+                    caches.open(CACHE).then(cache => cache.put(request, copy));
+                }
+                return response;
+            })
+            .catch(async () => {
+                const cached = await caches.match(request);
+                if (cached) return cached;
+                if (request.mode === 'navigate') {
+                    return (await caches.match('index.html')) || (await caches.match('./'));
+                }
+                return Response.error();
+            })
     );
 });

@@ -77,8 +77,8 @@ const Nutrition = (() => {
                 ariaLabel: 'Protein intake over the last 14 days',
             })}</div>
             <div class="chart-legend">
-                <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#2C68C8"></span>Daily intake</div>
-                ${target ? '<div class="chart-legend-item"><span class="chart-legend-dot" style="background:#8A8A82"></span>Target</div>' : ''}
+                <div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--blue)"></span>Daily intake</div>
+                ${target ? '<div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--chart-muted)"></span>Target</div>' : ''}
             </div>
 
             <div class="tile-grid">

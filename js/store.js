@@ -49,6 +49,7 @@ const Store = (() => {
         TEMPLATES: 'gym_templates',          // Gespeicherte Routinen
         SETTINGS: 'gym_settings',            // Benutzereinstellungen
         BODY: 'gym_bodyweight',              // Körpergewicht-Einträge
+        PROTEIN: 'gym_protein',              // Eiweißaufnahme pro Tag
         ACTIVE: 'gym_active_workout',        // Gerade laufendes Workout
         META: 'gym_meta',                    // Zusatzinfos (Backup-Datum etc.)
     };
@@ -69,6 +70,17 @@ const Store = (() => {
         Arms: '#7FB4DA',
         Core: '#A9C9E4',
         Other: '#8A8A82',
+    };
+
+    /** Die gleiche Rampe, aufgehellt für den dunklen Modus. */
+    const MUSCLE_COLORS_DARK = {
+        Chest: '#2F6FD0',
+        Back: '#4A8CF0',
+        Legs: '#1E4C96',
+        Shoulders: '#7FB4DA',
+        Arms: '#A9C9E4',
+        Core: '#CFE3F5',
+        Other: '#7E7D78',
     };
 
     /* ──────────────────────────────────────────────────────────
@@ -157,11 +169,14 @@ const Store = (() => {
        Wert überschrieben – der Rest bleibt default.
        ────────────────────────────────────────────────────────── */
     const DEFAULT_SETTINGS = {
-        theme: 'dark',              // 'dark' | 'light' | 'system'
+        // Das Farbschema liegt in theme.js und nicht hier, weil es schon
+        // gesetzt sein muss, bevor die erste Zeile gezeichnet wird.
         unit: 'kg',                 // kg oder lb (Pfund)
+        proteinPerKg: 1.8,          // Gramm Eiweiß pro kg Körpergewicht und Tag
+        proteinManual: 0,           // festes Tagesziel; überschreibt die Berechnung wenn > 0
         goalVolume: 20000,          // Wochenziel für Volumen (Gewicht × Wdh.)
         goalWorkouts: 4,            // Wochenziel: Trainings pro Woche
-        goalSets: 60,               // Wochenziel: Arbeitssätze pro Woche
+        goalSets: 48,               // Wochenziel: Arbeitssätze pro Woche
         restDefault: 90,            // Standard-Pausenzeit in Sekunden
         restAuto: true,             // Pause automatisch starten nach Satz
         sound: true,                // Ton abspielen wenn Pause vorbei
@@ -172,16 +187,15 @@ const Store = (() => {
     };
 
     /**
-     * applyTheme(themeName) — Aktiviert das gewählte Farbschema (Theme).
-     * @param {string} themeName - 'dark', 'light', oder 'system'
+     * muscleColor(group) — Die Farbe einer Muskelgruppe für das aktive Theme.
+     *
+     * Im dunklen Modus wird die Rampe aufgehellt, sonst würden die
+     * dunkelsten Blautöne vor schwarzem Hintergrund verschwinden.
      */
-    function applyTheme(themeName) {
-        const t = themeName || settings().theme || 'dark';
-        let effective = t;
-        if (t === 'system') {
-            effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        }
-        document.documentElement.setAttribute('data-theme', effective);
+    function muscleColor(group) {
+        const dark = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark';
+        const table = dark ? MUSCLE_COLORS_DARK : MUSCLE_COLORS;
+        return table[group] || table.Other;
     }
 
 
@@ -462,6 +476,72 @@ const Store = (() => {
         write(KEYS.BODY, read(KEYS.BODY, []).filter(e => e.date !== dateISO));
     }
 
+    /** latestBodyWeight() — Das zuletzt eingetragene Körpergewicht, oder null. */
+    function latestBodyWeight() {
+        const log = bodyLog();
+        return log.length ? log[log.length - 1].weight : null;
+    }
+
+    /* ──────────────────────────────────────────────────────────
+       PROTEIN — Tägliche Eiweißaufnahme
+
+       Ein Eintrag pro Tag: { day: '2026-08-11', grams: 145 }
+       Das Tagesziel wird aus dem Körpergewicht berechnet, damit
+       es sich automatisch mitzieht, wenn sich das Gewicht ändert.
+       ────────────────────────────────────────────────────────── */
+
+    /** proteinLog() — Alle Protein-Einträge, ältester zuerst. */
+    function proteinLog() {
+        return read(KEYS.PROTEIN, []).sort((a, b) => a.day.localeCompare(b.day));
+    }
+
+    /**
+     * dayString(date) — Macht aus einem Datum den Tagesschlüssel "2026-08-11".
+     * Bewusst aus den lokalen Datumsteilen gebaut und nicht aus toISOString(),
+     * weil letzteres in UTC rechnet und abends den falschen Tag liefern würde.
+     */
+    function dayString(date = new Date()) {
+        const d = new Date(date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    /** proteinOn(date) — Wie viel Gramm an diesem Tag erfasst wurden (0 wenn nichts). */
+    function proteinOn(date = new Date()) {
+        const day = dayString(date);
+        const entry = read(KEYS.PROTEIN, []).find(e => e.day === day);
+        return entry ? Number(entry.grams) || 0 : 0;
+    }
+
+    /** setProtein(grams, date) — Setzt den Tageswert (0 löscht den Eintrag). */
+    function setProtein(grams, date = new Date()) {
+        const day = dayString(date);
+        const list = read(KEYS.PROTEIN, []).filter(e => e.day !== day);
+        const value = Math.max(0, Math.round(Number(grams) || 0));
+        if (value > 0) list.push({ day, grams: value });
+        write(KEYS.PROTEIN, list);
+        return value;
+    }
+
+    /** addProtein(grams, date) — Addiert auf den bestehenden Tageswert. */
+    function addProtein(grams, date = new Date()) {
+        return setProtein(proteinOn(date) + (Number(grams) || 0), date);
+    }
+
+    /**
+     * proteinTarget() — Das Tagesziel in Gramm.
+     *
+     * Entweder ein fest eingestellter Wert (proteinManual), oder
+     * Körpergewicht × Gramm pro Kilo. Ohne Körpergewicht gibt es
+     * kein Ziel → null, und die Oberfläche bittet um einen Eintrag.
+     */
+    function proteinTarget() {
+        const s = settings();
+        if (s.proteinManual > 0) return Math.round(s.proteinManual);
+        const weight = latestBodyWeight();
+        if (!weight) return null;
+        return Math.round(weight * s.proteinPerKg);
+    }
+
     /* ──────────────────────────────────────────────────────────
        SETTINGS — Benutzereinstellungen
        ────────────────────────────────────────────────────────── */
@@ -702,7 +782,7 @@ const Store = (() => {
        das "Module Pattern" (Revealing Module Pattern).
        ────────────────────────────────────────────────────────── */
     return {
-        KEYS, MUSCLES, CATEGORIES, MUSCLE_COLORS, BUILT_IN, DEFAULT_SETTINGS, LB_PER_KG,
+        KEYS, MUSCLES, CATEGORIES, MUSCLE_COLORS, MUSCLE_COLORS_DARK, muscleColor, BUILT_IN, DEFAULT_SETTINGS, LB_PER_KG,
         uid,
         customExercises, allExercises, exercise, exerciseName, searchExercises, saveExercise, deleteExercise,
         workouts, workout, saveWorkout, deleteWorkout,
@@ -713,6 +793,6 @@ const Store = (() => {
         activeWorkout, saveActiveWorkout, clearActiveWorkout,
         meta, setMeta,
         exportAll, importAll, clearAll, storageSize,
-        toDisplay, toBase, unit, applyTheme,
+        toDisplay, toBase, unit,
     };
 })();

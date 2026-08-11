@@ -209,7 +209,7 @@ const Picker = (() => {
                     // Multi-Modus: auswählen oder abwählen (toggle)
                     const i = picked.indexOf(id);
                     if (i >= 0) picked.splice(i, 1); else picked.push(id);
-                    UI.haptic(8);
+                    UI.haptic('tap');
                     // Visuelles Feedback: alle Zeilen mit dieser ID aktualisieren
                     listWrap.querySelectorAll(`.pick-row[data-id="${id}"]`)
                         .forEach(n => n.classList.toggle('is-picked', picked.includes(id)));

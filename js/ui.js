@@ -419,46 +419,52 @@ const UI = (() => {
         }
     }
 
+    /* ──────────────────────────────────────────────────────────
+       HAPTIK — Vibration, zwei Wege, beide harmlos wenn nicht unterstützt
+
+       1. navigator.vibrate deckt Android und Desktop-Chrome ab.
+       2. Safari hat keine Vibration-API. Das einzige Element, dem iOS
+          eine System-Haptik gibt, ist ein <input type="checkbox" switch>
+          (ab iOS 17.4) — deshalb liegt ein unsichtbarer im DOM, der aus
+          einer echten Nutzergeste heraus umgeschaltet wird.
+
+       Ton wird bewusst NICHT als Ersatz benutzt: ein kurzer Klick klingt
+       nicht wie Haptik, er ist nur ein Geräusch. Der einzige Ton in der
+       App markiert das Ende der Satzpause.
+       ────────────────────────────────────────────────────────── */
+    const PATTERNS = {
+        tap: 8,          // leichte Bestätigung (Tab-Wechsel, Auswahl)
+        select: 12,      // Schalter, Segmente
+        impact: 20,      // Satz abgehakt
+        success: [14, 60, 14],
+        warn: [26, 70, 26],
+        alarm: [180, 90, 180],   // Pause vorbei
+    };
+
+    /** Legt den versteckten Schalter beim ersten Bedarf an. */
+    function hapticSwitch() {
+        if (hapticLabel) return hapticLabel;
+        const wrap = el(`<div aria-hidden="true" style="position:fixed;left:-20px;top:-20px;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0">
+            <input type="checkbox" switch id="ui-haptic-input" tabindex="-1">
+            <label for="ui-haptic-input" id="ui-haptic-label"></label>
+        </div>`);
+        document.body.appendChild(wrap);
+        hapticLabel = wrap.querySelector('#ui-haptic-label');
+        return hapticLabel;
+    }
+
     /**
-     * haptic(pattern) — Erzeugt eine Vibration.
-     *
-     * Auf Android: navigator.vibrate() funktioniert direkt.
-     * Auf iOS: Die Vibration-API ist nicht verfügbar. Stattdessen
-     * klicken wir ein verstecktes <input type="checkbox" switch>,
-     * was auf iOS 17.4+ eine System-Haptik auslöst.
-     *
-     * @param {number|number[]} pattern - Dauer in ms (oder Array für Muster)
+     * haptic(intent) — Rückmeldung auslösen.
+     * @param {string|number|number[]} intent - tap | select | impact | success | warn | alarm
      */
-    function haptic(pattern = 12) {
+    function haptic(intent = 'tap') {
         if (!Store.settings().haptics) return;
-        if (navigator.vibrate) {
-            try { navigator.vibrate(pattern); } catch (e) { /* ignore */ }
+        const pattern = typeof intent === 'string' ? (PATTERNS[intent] || PATTERNS.tap) : intent;
+
+        if (typeof navigator.vibrate === 'function') {
+            try { navigator.vibrate(pattern); } catch (e) { /* nicht unterstützt */ }
         }
-        try {
-            const ctx = ensureAudio();
-            if (ctx && ctx.state === 'running') {
-                const t0 = ctx.currentTime;
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(1200, t0);
-                osc.frequency.exponentialRampToValueAtTime(300, t0 + 0.007);
-                gain.gain.setValueAtTime(0.03, t0);
-                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.007);
-                osc.connect(gain).connect(ctx.destination);
-                osc.start(t0);
-                osc.stop(t0 + 0.008);
-            }
-        } catch (e) { /* ignore */ }
-        if (!hapticLabel) {
-            const wrap = el(`<div style="position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;left:-10px;top:-10px">
-                <input type="checkbox" switch id="ui-haptic-input">
-                <label for="ui-haptic-input" id="ui-haptic-label"></label>
-            </div>`);
-            document.body.appendChild(wrap);
-            hapticLabel = document.getElementById('ui-haptic-label');
-        }
-        try { hapticSwitch().click(); } catch (e) { /* unsupported */ }
+        try { hapticSwitch().click(); } catch (e) { /* nicht unterstützt */ }
     }
 
     /** True when the browser exposes a real vibration motor. */

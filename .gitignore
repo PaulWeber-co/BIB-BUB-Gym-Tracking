@@ -1,0 +1,7 @@
+node_modules/
+package-lock.json
+
+# scratch files from local debugging
+test_*.js
+*.log
+.DS_Store

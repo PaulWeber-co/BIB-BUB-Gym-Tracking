@@ -85,8 +85,8 @@ const Trends = (() => {
                     ariaLabel: 'Weekly training volume',
                 })}</div>
                 <div class="chart-legend">
-                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#2C68C8"></span>Volume per week</div>
-                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#8A8A82"></span>Weekly goal</div>
+                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--blue)"></span>Volume per week</div>
+                    <div class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--chart-muted)"></span>Weekly goal</div>
                 </div>
             </div>
 
@@ -97,7 +97,7 @@ const Trends = (() => {
                 <div class="chart-wrap">${Charts.bars(workoutBars, {
                     goal: Store.settings().goalWorkouts,
                     height: 110,
-                    color: '#16386E',
+                    color: Charts.palette().navy,
                     labels: false,
                     ariaLabel: 'Workouts per week',
                 })}</div>
@@ -113,7 +113,7 @@ const Trends = (() => {
                     : split.map(m => `
                         <div class="dist-row">
                             <div class="dist-name">${UI.esc(m.muscle)}</div>
-                            <div class="dist-track"><div class="dist-fill" style="width:${(m.pct * 100).toFixed(1)}%;background:${Store.MUSCLE_COLORS[m.muscle]}"></div></div>
+                            <div class="dist-track"><div class="dist-fill" style="width:${(m.pct * 100).toFixed(1)}%;background:${Store.muscleColor(m.muscle)}"></div></div>
                             <div class="dist-value">${Math.round(m.pct * 100)}%</div>
                         </div>`).join('')}
                 ${splitTotal > 0 ? `<div class="tiny muted mt-8">${Stats.fmtVolume(splitTotal)} ${Store.unit()} total volume in the last ${splitDays} days.</div>` : ''}
@@ -212,8 +212,8 @@ const Trends = (() => {
                 </div>
                 <div class="chart-wrap">${Charts.line(points, {
                     height: 175,
-                    color: metric === 'volume' ? '#16386E' : '#2C68C8',
-                    colorSoft: metric === 'volume' ? 'rgba(22,56,110,0.20)' : 'rgba(44,104,200,0.20)',
+                    color: metric === 'volume' ? Charts.palette().navy : Charts.palette().blue,
+                    colorSoft: metric === 'volume' ? 'rgba(36,88,158,0.22)' : 'rgba(74,140,240,0.22)',
                     formatValue: v => (metric === 'reps' ? String(Math.round(v)) : String(Math.round(v * 10) / 10)),
                     ariaLabel: `${m.title} progression`,
                 })}</div>
@@ -252,6 +252,40 @@ const Trends = (() => {
             </div>`;
     }
 
+    /**
+     * proteinCard() — Die Protein-Karte im Body-Tab.
+     * Zeigt den heutigen Stand, den Schnitt der letzten Woche und
+     * die letzten 14 Tage als Balken mit Ziellinie.
+     */
+    function proteinCard() {
+        const target = Store.proteinTarget();
+        const series = Stats.proteinSeries(14);
+        const today = Store.proteinOn();
+        const average = Stats.proteinAverage(7);
+
+        return `
+            <div class="section-title">
+                <h2>Protein</h2>
+                <button class="section-link" data-act="protein">Log</button>
+            </div>
+            <div class="card">
+                <div class="metric-big">${today}<span class="unit"> / ${target === null ? '—' : target} g today</span></div>
+                <div class="metric-caption">${target === null
+                    ? 'Log a body weight to get a target'
+                    : `${Math.round(average)} g average over 7 days &middot; ${Stats.proteinStreak()} day streak`}</div>
+                <div class="chart-wrap">${Charts.bars(series.map((d, i) => ({
+                    value: d.grams,
+                    highlight: i === series.length - 1,
+                })), {
+                    height: 110,
+                    barWidth: 16,
+                    goal: target || 0,
+                    labels: false,
+                    ariaLabel: 'Protein intake over the last 14 days',
+                })}</div>
+            </div>`;
+    }
+
     /* ──────────────────────────────────────────────────────────
        BODY WEIGHT — Körpergewicht-Tracking & Trend
        ────────────────────────────────────────────────────────── */
@@ -286,7 +320,7 @@ const Trends = (() => {
                 </div>
                 <div class="chart-wrap">${Charts.line(points, {
                     height: 175,
-                    color: '#16386E', colorSoft: 'rgba(22,56,110,0.20)',
+                    color: Charts.palette().navy, colorSoft: 'rgba(36,88,158,0.22)',
                     formatValue: v => String(Math.round(v * 10) / 10),
                     ariaLabel: 'Body weight',
                 })}</div>

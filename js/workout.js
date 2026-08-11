@@ -303,7 +303,7 @@ const Workout = (() => {
 
         if (set.completed) {
             if (set.weight === '') set.weight = 0;
-            UI.haptic(14);
+            UI.haptic('impact');
             checkRecord(ex, set);
 
             // Inside a superset you move straight to the next exercise; the rest
@@ -487,8 +487,45 @@ const Workout = (() => {
     }
 
     /**
+     * noteHtml(ex, i) — Das Notizfeld einer Übung.
+     *
+     * Bei einseitigen Übungen kann man zwei getrennte Notizen führen
+     * (links / rechts), sonst gibt es ein einzelnes Feld. Das Feld
+     * erscheint nur, wenn es über das Menü eingeblendet wurde oder
+     * bereits Text enthält.
+     */
+    function noteHtml(ex, i) {
+        const uni = !!ex.isUnilateral;
+        const hasAny = ex.notes || ex.notesL || ex.notesR;
+        if (!ex.showNote && !hasAny) return '';
+
+        if (uni && ex.splitNotes) {
+            return `
+                <div class="wex-note">
+                    <div class="wex-note-field">
+                        <span class="wex-note-tag">L</span>
+                        <textarea rows="1" placeholder="Left side" data-act="note" data-field="notesL" data-ex="${i}">${UI.esc(ex.notesL || '')}</textarea>
+                    </div>
+                    <div class="wex-note-field">
+                        <span class="wex-note-tag">R</span>
+                        <textarea rows="1" placeholder="Right side" data-act="note" data-field="notesR" data-ex="${i}">${UI.esc(ex.notesR || '')}</textarea>
+                    </div>
+                </div>`;
+        }
+
+        return `
+            <div class="wex-note">
+                <div class="wex-note-field">
+                    <textarea rows="1" placeholder="Notes, cues, machine settings"
+                        data-act="note" data-field="notes" data-ex="${i}">${UI.esc(ex.notes || '')}</textarea>
+                </div>
+            </div>`;
+    }
+
+    /**
      * render() — Erzeugt das HTML für alle Übungen und Sätze des Workouts.
      * Rendert unilaterale Übungen mit zwei Spalten (L und R) und bilateral mit Reps.
+     * Supersets werden als ein gemeinsamer Block mit blauer Kopfzeile gezeichnet.
      */
     function render() {
         if (!current) { body().innerHTML = ''; return; }
@@ -821,7 +858,7 @@ const Workout = (() => {
 
         Store.saveWorkout(workout);
         const records = Stats.workoutRecords(workout);
-        UI.haptic([20, 60, 20, 60, 40]);
+        UI.haptic('success');
 
         stopRest(true);
         stopTicker();
@@ -982,7 +1019,9 @@ const Workout = (() => {
             const i = Number(input.dataset.ex);
             const j = Number(input.dataset.set);
             if (input.dataset.act === 'note') {
-                current.exercises[i].notes = input.value;
+                // Notizfelder tragen data-field: notes, notesL oder notesR
+                const field = input.dataset.field || 'notes';
+                current.exercises[i][field] = input.value;
                 persist();
                 autoSizeNotes();
             } else if (input.dataset.field) {
@@ -990,17 +1029,22 @@ const Workout = (() => {
             }
         });
 
-        container.addEventListener('change', (e) => {
-            const input = e.target;
-            if (input.dataset.field) {
-                const i = Number(input.dataset.ex);
-                const j = Number(input.dataset.set);
-                render();
-            }
-        });
+        /* Bewusst KEIN 'change'-Handler, der neu rendert: change feuert beim
+           Verlassen eines Feldes, also genau während man ins nächste tippt.
+           Ein render() an dieser Stelle tauscht das gerade fokussierte Feld
+           aus und verschluckt die Eingabe. Der input-Handler oben speichert
+           ohnehin nach jedem Zeichen. */
 
         document.getElementById('btn-workout-finish').addEventListener('click', finish);
-        document.getElementById('btn-workout-cancel').addEventListener('click', minimize);
+        document.getElementById('btn-workout-cancel').addEventListener('click', () => {
+            UI.actionSheet({
+                title: 'Workout',
+                actions: [
+                    { label: 'Minimize', plain: true, onSelect: minimize },
+                    { label: 'Discard Workout', destructive: true, onSelect: () => discard() },
+                ],
+            });
+        });
 
         document.querySelector('[data-rest-adjust="15"]').addEventListener('click', () => adjustRest(15));
         document.querySelector('[data-rest-adjust="-15"]').addEventListener('click', () => adjustRest(-15));

@@ -25,6 +25,9 @@ it runs without internet and keeps your data safe in the browser.
 | 📅 **History & Calendar** | Calendar view and list of all past workouts |
 | 🏅 **Personal Records** | Automatic PR detection with notification |
 | 📦 **Backup & Restore** | Export / import all data as a JSON file |
+| 🥩 **Protein Tracking** | Daily target from your body weight, quick logging, 14-day chart |
+| 🔗 **Supersets** | Link exercises; the rest timer waits until the round is done |
+| 🌓 **Light & Dark** | Follows iOS, or pick one — dark keeps bars dark for badly lit gyms |
 | ⚙️ **Settings** | kg / lb toggle, weekly goals, bar weight for plate calculator |
 
 ---
@@ -44,10 +47,13 @@ BIB-BUB-Gym-Tracking/
 ├── icons/                  ← App icons for the home screen
 │
 └── js/                     ← All the logic, split into modules
+    ├── theme.js            ← 🎨 Light / dark / system, set before the first paint
     ├── store.js            ← 💾 Data layer: saves/loads everything from localStorage
     ├── stats.js            ← 📊 Calculations: volume, 1RM, records, streaks
-    ├── charts.js           ← 📈 Drawing: SVG rings, bar charts, line charts
+    ├── charts.js           ← 📈 Drawing: SVG bar charts, line charts, calendar
+    ├── muscles.js          ← 🧍 Body diagrams showing the trained muscle group
     ├── ui.js               ← 🖼️ UI helpers: modals, alerts, toasts, haptics
+    ├── nutrition.js        ← 🥩 Protein target and daily logging
     ├── picker.js           ← 🔍 Exercise selection modal with search
     ├── workout.js          ← 🏋️ The live workout screen (sets, timer, PR detection)
     ├── routines.js         ← 📝 Routine templates (create, edit, start)
@@ -55,7 +61,7 @@ BIB-BUB-Gym-Tracking/
     ├── trends.js           ← 📈 Long-term trends: load, per-exercise, body weight
     ├── exercises.js        ← 📋 Exercise library: browse, create, detail
     ├── settings.js         ← ⚙️ Settings panel: goals, units, backup
-    ├── summary.js          ← 🏠 Home screen: rings, week, quick start
+    ├── summary.js          ← 🏠 Home screen: goal bands, quick start, records
     └── app.js              ← 🚀 Main entry: navigation, init, wiring
 ```
 
@@ -290,6 +296,23 @@ npx -y http-server . -p 8080 -o
 
 # Then open http://localhost:8080 in your browser
 ```
+
+## 📦 Releasing – IMPORTANT
+
+Asset URLs carry `?v=<version>` and the service worker fetches **network first**.
+Both exist because of a real outage: an earlier release served a fresh `index.html`
+together with **cached scripts from the previous version**, which left the app on a
+blank screen.
+
+**When you change any file under `css/` or `js/`, bump the version in both places:**
+
+1. `VERSION` at the top of `sw.js`
+2. the `?v=` query on the stylesheet and every `<script>` in `index.html`
+
+A worker taking control reloads the page once, so a tab that already loaded old code
+lands on the new release instead of running half of each. If something ever does go
+wrong, the app shows an error card with a **Reload App** button that clears all caches
+and service workers — never a blank page again.
 
 ## 🚀 Deploy to GitHub Pages
 

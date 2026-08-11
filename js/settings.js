@@ -35,12 +35,13 @@ const Settings = (() => {
         const proteinTarget = Store.proteinTarget();
 
         el.innerHTML = `
-            <div class="section-title"><h2 style="font-size:1.0625rem">Appearance</h2></div>
+            <div class="section-title"><h2>Appearance</h2></div>
             <div class="segmented" data-role="theme">
-                <button data-theme="dark" class="${s.theme === 'dark' ? 'is-active' : ''}">Dark</button>
-                <button data-theme="light" class="${s.theme === 'light' ? 'is-active' : ''}">Light</button>
-                <button data-theme="system" class="${s.theme === 'system' ? 'is-active' : ''}">System</button>
+                <button data-theme-mode="system" class="${Theme.mode() === 'system' ? 'is-active' : ''}">System</button>
+                <button data-theme-mode="light" class="${Theme.mode() === 'light' ? 'is-active' : ''}">Light</button>
+                <button data-theme-mode="dark" class="${Theme.mode() === 'dark' ? 'is-active' : ''}">Dark</button>
             </div>
+            <p class="tiny muted">Dark hält Leisten und Overlays dunkel — für schlecht beleuchtete Studios.</p>
 
             <div class="section-title"><h2 style="font-size:1.0625rem">Weekly Goals</h2></div>
             <div class="list">
@@ -228,9 +229,9 @@ const Settings = (() => {
 
         el.querySelectorAll('[data-role="theme"] button').forEach(btn => {
             btn.addEventListener('click', () => {
-                Store.setSetting('theme', btn.dataset.theme);
-                Store.applyTheme(btn.dataset.theme);
-                rerender();
+                Theme.set(btn.dataset.themeMode);
+                UI.haptic('select');
+                rerender();      // Charts und Diagramme lesen die Palette neu
             });
         });
 
