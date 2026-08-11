@@ -33,6 +33,13 @@ const Settings = (() => {
         const lastExport = Store.meta().lastExport;
 
         el.innerHTML = `
+            <div class="section-title"><h2 style="font-size:1.0625rem">Appearance</h2></div>
+            <div class="segmented" data-role="theme">
+                <button data-theme="dark" class="${s.theme === 'dark' ? 'is-active' : ''}">Dark</button>
+                <button data-theme="light" class="${s.theme === 'light' ? 'is-active' : ''}">Light</button>
+                <button data-theme="system" class="${s.theme === 'system' ? 'is-active' : ''}">System</button>
+            </div>
+
             <div class="section-title"><h2 style="font-size:1.0625rem">Weekly Goals</h2></div>
             <div class="list">
                 ${stepperRow('Volume', 'goalVolume', Stats.fmtVolume(s.goalVolume) + ' ' + Store.unit(), 'Sum of weight × reps across the week.')}
@@ -202,6 +209,14 @@ const Settings = (() => {
                     Store.setSetting(key, Math.min(300, Math.max(5, s.goalSets + dir * 5)));
                 }
                 UI.haptic(6);
+                rerender();
+            });
+        });
+
+        el.querySelectorAll('[data-role="theme"] button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                Store.setSetting('theme', btn.dataset.theme);
+                Store.applyTheme(btn.dataset.theme);
                 rerender();
             });
         });

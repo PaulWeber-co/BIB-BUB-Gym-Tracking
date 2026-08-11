@@ -58,6 +58,62 @@
     --ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+/* ──────────────────────────────────────────────────────────
+   LIGHT MODE OVERRIDES — Hellen Modus aktivieren
+   Wenn html das Attribut [data-theme="light"] hat, überschreiben
+   wir alle Farbvariablen mit hellen Gegenstücken.
+   ────────────────────────────────────────────────────────── */
+html[data-theme="light"] {
+    --bg: #F2F2F7;
+    --elev-1: #FFFFFF;
+    --elev-2: #E5E5EA;
+    --elev-3: #D1D1D6;
+    --fill: rgba(120, 120, 128, 0.12);
+    --fill-strong: rgba(120, 120, 128, 0.24);
+    --sep: rgba(60, 60, 67, 0.22);
+    --track: rgba(0, 0, 0, 0.08);
+
+    --label: #000000;
+    --label-2: rgba(60, 60, 67, 0.60);
+    --label-3: rgba(60, 60, 67, 0.35);
+    --label-4: rgba(60, 60, 67, 0.18);
+}
+
+html[data-theme="light"] .nav-bar {
+    background: rgba(242, 242, 247, 0.82);
+}
+
+html[data-theme="light"] .tab-bar {
+    background: rgba(245, 245, 247, 0.88);
+}
+
+html[data-theme="light"] .action-group,
+html[data-theme="light"] .alert {
+    background: rgba(245, 245, 247, 0.96);
+}
+
+html[data-theme="light"] .action-cancel {
+    background: rgba(255, 255, 255, 0.96);
+    color: #000000;
+}
+
+html[data-theme="light"] .segmented button.is-active {
+    background: #FFFFFF;
+    color: #000000;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+html[data-theme="light"] .chip.is-active {
+    background: #000000;
+    color: #FFFFFF;
+}
+
+html[data-theme="light"] .week-day.is-today .week-day-num {
+    background: #000000;
+    color: #FFFFFF;
+}
+
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html {

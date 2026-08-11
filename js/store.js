@@ -157,6 +157,7 @@ const Store = (() => {
        Wert überschrieben – der Rest bleibt default.
        ────────────────────────────────────────────────────────── */
     const DEFAULT_SETTINGS = {
+        theme: 'dark',              // 'dark' | 'light' | 'system'
         unit: 'kg',                 // kg oder lb (Pfund)
         goalVolume: 20000,          // Wochenziel für Volumen (Gewicht × Wdh.)
         goalWorkouts: 4,            // Wochenziel: Trainings pro Woche
@@ -169,6 +170,24 @@ const Store = (() => {
         weekStart: 1,               // 1 = Montag (0 = Sonntag)
         healthShortcut: '',         // Name eines Apple Shortcuts für Health-Export
     };
+
+    /**
+     * applyTheme(themeName) — Aktiviert das gewählte Farbschema (Theme).
+     * @param {string} themeName - 'dark', 'light', oder 'system'
+     */
+    function applyTheme(themeName) {
+        const t = themeName || settings().theme || 'dark';
+        let effective = t;
+        if (t === 'system') {
+            effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        if (effective === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    }
+
 
     /* ──────────────────────────────────────────────────────────
        LOW-LEVEL FUNKTIONEN — Grundbausteine zum Lesen/Schreiben
@@ -683,6 +702,6 @@ const Store = (() => {
         activeWorkout, saveActiveWorkout, clearActiveWorkout,
         meta, setMeta,
         exportAll, importAll, clearAll, storageSize,
-        toDisplay, toBase, unit,
+        toDisplay, toBase, unit, applyTheme,
     };
 })();

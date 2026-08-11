@@ -155,6 +155,14 @@ const App = (() => {
        ────────────────────────────────────────────────────────── */
 
     function init() {
+        // Theme beim Start anwenden (Dark / Light / System)
+        Store.applyTheme();
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+                if (Store.settings().theme === 'system') Store.applyTheme('system');
+            });
+        }
+
         // ---- Schritt 1: Alle Module "binden" (Event-Listener setzen) ----
         // Jedes Modul hat eine bind()-Funktion, die Klick-Handler
         // und andere Event-Listener an ihre HTML-Elemente hängt.
