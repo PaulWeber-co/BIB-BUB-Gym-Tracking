@@ -12,6 +12,7 @@ const Store = (() => {
         TEMPLATES: 'gym_templates',
         SETTINGS: 'gym_settings',
         BODY: 'gym_bodyweight',
+        PROTEIN: 'gym_protein',
         ACTIVE: 'gym_active_workout',
         META: 'gym_meta',
     };
@@ -19,14 +20,16 @@ const Store = (() => {
     const MUSCLES = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
     const CATEGORIES = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight', 'Other'];
 
+    // A single blue ramp, dark to light, so charts stay on brand and
+    // remain distinguishable when printed or seen in bright sunlight.
     const MUSCLE_COLORS = {
-        Chest: '#FF375F',
-        Back: '#0A84FF',
-        Legs: '#BF5AF2',
-        Shoulders: '#FF9F0A',
-        Arms: '#30D158',
-        Core: '#64D2FF',
-        Other: '#8E8E93',
+        Chest: '#16386E',
+        Back: '#2C68C8',
+        Legs: '#0A2340',
+        Shoulders: '#5B95D6',
+        Arms: '#7FB4DA',
+        Core: '#A9C9E4',
+        Other: '#8A8A82',
     };
 
     const BUILT_IN = [
@@ -100,9 +103,11 @@ const Store = (() => {
 
     const DEFAULT_SETTINGS = {
         unit: 'kg',                 // kg | lb
-        goalVolume: 20000,          // per week, in the stored unit-neutral base (kg)
+        proteinPerKg: 1.8,          // grams of protein per kg of body weight, per day
+        proteinManual: 0,           // overrides the computed target when > 0
+        goalVolume: 20000,          // per week, in kg — drives the volume chart target
         goalWorkouts: 4,            // per week
-        goalSets: 60,               // per week
+        goalSets: 48,               // per week
         restDefault: 90,            // seconds
         restAuto: true,             // start rest timer when a set is checked
         sound: true,
@@ -131,7 +136,10 @@ const Store = (() => {
             return true;
         } catch (e) {
             console.warn('Store: could not write', key, e);
-            if (window.UI) UI.toast({ title: 'Storage full', sub: 'Export a backup in Settings.', tone: 'warn' });
+            // top level `const` bindings are not window properties, so probe the binding itself
+            if (typeof UI !== 'undefined') {
+                UI.toast({ title: 'Storage full', sub: 'Export a backup in Settings.', tone: 'warn' });
+            }
             return false;
         }
     }
@@ -265,6 +273,50 @@ const Store = (() => {
         write(KEYS.BODY, read(KEYS.BODY, []).filter(e => e.date !== dateISO));
     }
 
+    function latestBodyWeight() {
+        const log = bodyLog();
+        return log.length ? log[log.length - 1].weight : null;
+    }
+
+    // ---------- protein ----------
+    // One entry per day: { day: 'YYYY-MM-DD', grams: n }
+    function proteinLog() {
+        return read(KEYS.PROTEIN, []).sort((a, b) => a.day.localeCompare(b.day));
+    }
+
+    function dayString(date = new Date()) {
+        const d = new Date(date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function proteinOn(date = new Date()) {
+        const day = dayString(date);
+        const entry = read(KEYS.PROTEIN, []).find(e => e.day === day);
+        return entry ? Number(entry.grams) || 0 : 0;
+    }
+
+    function setProtein(grams, date = new Date()) {
+        const day = dayString(date);
+        const list = read(KEYS.PROTEIN, []).filter(e => e.day !== day);
+        const value = Math.max(0, Math.round(Number(grams) || 0));
+        if (value > 0) list.push({ day, grams: value });
+        write(KEYS.PROTEIN, list);
+        return value;
+    }
+
+    function addProtein(grams, date = new Date()) {
+        return setProtein(proteinOn(date) + (Number(grams) || 0), date);
+    }
+
+    /** Daily protein target in grams, derived from the latest body weight. */
+    function proteinTarget() {
+        const s = settings();
+        if (s.proteinManual > 0) return Math.round(s.proteinManual);
+        const weight = latestBodyWeight();
+        if (!weight) return null;
+        return Math.round(weight * s.proteinPerKg);
+    }
+
     // ---------- settings ----------
     let settingsCache = null;
 
@@ -315,6 +367,7 @@ const Store = (() => {
             workouts: read(KEYS.WORKOUTS, []),
             routines: read(KEYS.TEMPLATES, []),
             bodyLog: read(KEYS.BODY, []),
+            proteinLog: read(KEYS.PROTEIN, []),
         };
     }
 
@@ -325,7 +378,7 @@ const Store = (() => {
             throw new Error('Not a valid backup file.');
         }
 
-        const counts = { workouts: 0, routines: 0, exercises: 0, body: 0 };
+        const counts = { workouts: 0, routines: 0, exercises: 0, body: 0, protein: 0 };
 
         const mergeById = (existing, incoming) => {
             const byId = new Map(existing.map(x => [x.id, x]));
@@ -343,10 +396,12 @@ const Store = (() => {
             write(KEYS.TEMPLATES, data.routines || data.templates || []);
             write(KEYS.EXERCISES, data.customExercises || []);
             write(KEYS.BODY, data.bodyLog || []);
+            write(KEYS.PROTEIN, data.proteinLog || []);
             counts.workouts = (data.workouts || []).length;
             counts.routines = (data.routines || data.templates || []).length;
             counts.exercises = (data.customExercises || []).length;
             counts.body = (data.bodyLog || []).length;
+            counts.protein = (data.proteinLog || []).length;
         } else {
             let r = mergeById(read(KEYS.WORKOUTS, []), data.workouts);
             write(KEYS.WORKOUTS, r.list); counts.workouts = r.added;
@@ -364,6 +419,14 @@ const Store = (() => {
                 bodyByDay.set(e.date.slice(0, 10), e);
             });
             write(KEYS.BODY, [...bodyByDay.values()]);
+
+            const proteinByDay = new Map(read(KEYS.PROTEIN, []).map(e => [e.day, e]));
+            (data.proteinLog || []).forEach(e => {
+                if (!e || !e.day) return;
+                if (!proteinByDay.has(e.day)) counts.protein++;
+                proteinByDay.set(e.day, e);
+            });
+            write(KEYS.PROTEIN, [...proteinByDay.values()]);
         }
 
         if (data.settings) {
@@ -418,7 +481,8 @@ const Store = (() => {
         customExercises, allExercises, exercise, exerciseName, searchExercises, saveExercise, deleteExercise,
         workouts, workout, saveWorkout, deleteWorkout,
         routines, routine, saveRoutine, deleteRoutine,
-        bodyLog, addBodyEntry, deleteBodyEntry,
+        bodyLog, addBodyEntry, deleteBodyEntry, latestBodyWeight,
+        proteinLog, proteinOn, setProtein, addProtein, proteinTarget, dayString,
         settings, setSetting,
         activeWorkout, saveActiveWorkout, clearActiveWorkout,
         meta, setMeta,

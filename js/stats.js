@@ -139,19 +139,31 @@ const Stats = (() => {
         return { from, to: addDays(from, 7), ...rangeTotals(from, addDays(from, 7)) };
     }
 
-    /** Ring progress for the current week: volume, workouts, sets. */
-    function rings(anchor = new Date()) {
+    /**
+     * The three headline goals on the summary.
+     * Protein is a daily target, workouts and sets are weekly.
+     */
+    function goals(anchor = new Date()) {
         const s = Store.settings();
         const t = weekTotals(anchor);
-        const mk = (value, goal) => ({
-            value,
-            goal: goal || 1,
-            pct: goal > 0 ? value / goal : 0,
-        });
+        const proteinGoal = Store.proteinTarget();
+
         return {
-            volume: mk(t.volume, s.goalVolume),
-            workouts: mk(t.workouts, s.goalWorkouts),
-            sets: mk(t.sets, s.goalSets),
+            protein: {
+                value: Store.proteinOn(anchor),
+                goal: proteinGoal,
+                pct: proteinGoal ? Store.proteinOn(anchor) / proteinGoal : 0,
+            },
+            workouts: {
+                value: t.workouts,
+                goal: s.goalWorkouts || 1,
+                pct: s.goalWorkouts > 0 ? t.workouts / s.goalWorkouts : 0,
+            },
+            sets: {
+                value: t.sets,
+                goal: s.goalSets || 1,
+                pct: s.goalSets > 0 ? t.sets / s.goalSets : 0,
+            },
             totals: t,
         };
     }
@@ -408,6 +420,47 @@ const Stats = (() => {
         return out.slice(0, limit);
     }
 
+    // ---------- protein ----------
+    /** Intake per day for the last n days, oldest first. */
+    function proteinSeries(days = 14) {
+        const log = new Map(Store.proteinLog().map(e => [e.day, Number(e.grams) || 0]));
+        const today = startOfDay(new Date());
+        const out = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const date = addDays(today, -i);
+            out.push({ date, grams: log.get(Store.dayString(date)) || 0 });
+        }
+        return out;
+    }
+
+    /** Consecutive days up to today on which the target was met. */
+    function proteinStreak() {
+        const target = Store.proteinTarget();
+        if (!target) return 0;
+        const log = new Map(Store.proteinLog().map(e => [e.day, Number(e.grams) || 0]));
+        const today = startOfDay(new Date());
+        let streak = 0;
+        for (let i = 0; i < 400; i++) {
+            const day = Store.dayString(addDays(today, -i));
+            const grams = log.get(day) || 0;
+            if (grams >= target) {
+                streak++;
+            } else if (i === 0) {
+                continue;   // today can still be completed
+            } else {
+                break;
+            }
+        }
+        return streak;
+    }
+
+    /** Average intake over the last n days, ignoring days with no entry. */
+    function proteinAverage(days = 7) {
+        const series = proteinSeries(days).filter(d => d.grams > 0);
+        if (series.length === 0) return 0;
+        return series.reduce((sum, d) => sum + d.grams, 0) / series.length;
+    }
+
     // ---------- body weight ----------
     function bodySeries(days = 180) {
         const from = addDays(startOfDay(new Date()), -days);
@@ -477,10 +530,11 @@ const Stats = (() => {
         DAY,
         startOfDay, startOfWeek, addDays, dayKey, sameDay,
         isUnilateralSet, setReps, setTopReps, setWeight, setVolume, isWorkingSet, e1rm, setE1rm,
-        workoutTotals, workoutTitle, workoutsBetween, rangeTotals, weekTotals, rings, weekDays,
+        workoutTotals, workoutTitle, workoutsBetween, rangeTotals, weekTotals, goals, weekDays,
         dailySeries, weeklySeries, muscleSplit, activityCalendar,
         weekStreak, daysSinceLastWorkout, allTime,
         exerciseSeries, records, lastSession, bestBefore, workoutRecords, recentRecords,
+        proteinSeries, proteinStreak, proteinAverage,
         bodySeries, bodyTrend,
         fmtWeight, fmtVolume, fmtDuration, fmtClock, fmtDate, fmtRelativeDay,
     };

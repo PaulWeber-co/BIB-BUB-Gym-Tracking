@@ -199,19 +199,19 @@ const UI = (() => {
 
     // ---------- toast ----------
     const TONES = {
-        info: { bg: 'rgba(10,132,255,0.22)', color: '#5AC8FA', icon: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/>' },
-        success: { bg: 'rgba(48,209,88,0.22)', color: '#30D158', icon: '<polyline points="20 6 9 17 4 12"/>' },
-        record: { bg: 'rgba(255,214,10,0.2)', color: '#FFD60A', icon: '<polygon points="12 2.6 14.9 8.5 21.4 9.4 16.7 14 17.8 20.5 12 17.4 6.2 20.5 7.3 14 2.6 9.4 9.1 8.5"/>' },
-        warn: { bg: 'rgba(255,159,10,0.2)', color: '#FF9F0A', icon: '<path d="M12 3 2.5 20h19z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17"/>' },
+        info: { color: '#7FB4DA', icon: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><line x1="12" y1="7.6" x2="12" y2="7.7"/>' },
+        success: { color: '#7FB4DA', icon: '<polyline points="20 6 9 17 4 12"/>' },
+        record: { color: '#FFFFFF', icon: '<polygon points="12 2.6 14.9 8.5 21.4 9.4 16.7 14 17.8 20.5 12 17.4 6.2 20.5 7.3 14 2.6 9.4 9.1 8.5"/>' },
+        warn: { color: '#F2C14E', icon: '<path d="M12 3 2.5 20h19z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17.1"/>' },
     };
 
     function toast({ title, sub, tone = 'info', duration = 2600 } = {}) {
         const t = TONES[tone] || TONES.info;
         const node = el(`
             <div class="toast">
-                <div class="toast-icon" style="background:${t.bg};color:${t.color}">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
-                        stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
+                <div class="toast-icon" style="color:${t.color}">
+                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
                 </div>
                 <div class="toast-text">
                     <div class="toast-title">${esc(title)}</div>
@@ -259,25 +259,46 @@ const UI = (() => {
         }
     }
 
-    /**
-     * Vibration works on Android. On iOS the Vibration API is unavailable, so we
-     * additionally poke a hidden switch control, which produces the system haptic
-     * on iOS 17.4+. Both are no-ops where unsupported.
-     */
-    function haptic(pattern = 12) {
+    /* ---------- haptics ----------
+       Two mechanisms, both no-ops where unsupported:
+       - navigator.vibrate covers Android and desktop Chrome.
+       - Safari has no Vibration API. Toggling a `switch` checkbox is the one
+         control iOS gives a system haptic to (17.4+), so a hidden one is
+         driven from a real user gesture. Sound is never used as a stand-in.  */
+    const PATTERNS = {
+        tap: 8,
+        select: 12,
+        impact: 20,
+        success: [14, 60, 14],
+        warn: [26, 70, 26],
+        alarm: [180, 90, 180],
+    };
+
+    function hapticSwitch() {
+        if (hapticLabel) return hapticLabel;
+        const wrap = el(`<div aria-hidden="true" style="position:fixed;left:-20px;top:-20px;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0">
+            <input type="checkbox" switch id="ui-haptic-input" tabindex="-1">
+            <label for="ui-haptic-input" id="ui-haptic-label"></label>
+        </div>`);
+        document.body.appendChild(wrap);
+        hapticLabel = wrap.querySelector('#ui-haptic-label');
+        return hapticLabel;
+    }
+
+    /** intent: tap | select | impact | success | warn | alarm */
+    function haptic(intent = 'tap') {
         if (!Store.settings().haptics) return;
-        if (navigator.vibrate) {
-            try { navigator.vibrate(pattern); } catch (e) { /* ignore */ }
+        const pattern = typeof intent === 'string' ? (PATTERNS[intent] || PATTERNS.tap) : intent;
+
+        if (typeof navigator.vibrate === 'function') {
+            try { navigator.vibrate(pattern); } catch (e) { /* unsupported */ }
         }
-        if (!hapticLabel) {
-            const wrap = el(`<div style="position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;left:-10px;top:-10px">
-                <input type="checkbox" switch id="ui-haptic-input">
-                <label for="ui-haptic-input" id="ui-haptic-label"></label>
-            </div>`);
-            document.body.appendChild(wrap);
-            hapticLabel = document.getElementById('ui-haptic-label');
-        }
-        try { hapticLabel.click(); } catch (e) { /* ignore */ }
+        try { hapticSwitch().click(); } catch (e) { /* unsupported */ }
+    }
+
+    /** True when the browser exposes a real vibration motor. */
+    function hasVibration() {
+        return typeof navigator.vibrate === 'function';
     }
 
     function unlockAudio() {
@@ -307,7 +328,8 @@ const UI = (() => {
             if (!anyOpen) {
                 document.getElementById('tab-bar').hidden = false;
                 lockScroll(false);
-                if (window.App) App.refreshMiniBar();
+                // top level `const` bindings are not window properties, so probe the binding itself
+                if (typeof App !== 'undefined') App.refreshMiniBar();
             }
         }, 340);
     }
@@ -346,7 +368,7 @@ const UI = (() => {
 
     return {
         esc, el, sheet, actionSheet, alert: alertBox, confirm, prompt, toast,
-        beep, haptic, unlockAudio, openScreen, closeScreen, screenOpen, closeTop,
+        beep, haptic, hasVibration, unlockAudio, openScreen, closeScreen, screenOpen, closeTop,
         num, download, bindScrollShadow, layers,
     };
 })();

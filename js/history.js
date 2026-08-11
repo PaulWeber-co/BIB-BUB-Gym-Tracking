@@ -149,7 +149,7 @@ const History = (() => {
                 <div class="hist-stats">
                     <div>
                         <div class="hist-stat-label">Volume</div>
-                        <div class="hist-stat-value">${Stats.fmtVolume(t.volume)} <span style="font-size:.6875rem;color:var(--label-2)">${Store.unit()}</span></div>
+                        <div class="hist-stat-value">${Stats.fmtVolume(t.volume)} <span style="font-size:.6875rem;color:var(--ink-2)">${Store.unit()}</span></div>
                     </div>
                     <div>
                         <div class="hist-stat-label">Sets</div>
@@ -185,7 +185,7 @@ const History = (() => {
                 <div class="hist-stats mt-8" style="gap:22px">
                     <div>
                         <div class="hist-stat-label">Volume</div>
-                        <div class="hist-stat-value">${Stats.fmtVolume(t.volume)} <span style="font-size:.6875rem;color:var(--label-2)">${Store.unit()}</span></div>
+                        <div class="hist-stat-value">${Stats.fmtVolume(t.volume)} <span style="font-size:.6875rem;color:var(--ink-2)">${Store.unit()}</span></div>
                     </div>
                     <div>
                         <div class="hist-stat-label">Sets</div>
@@ -208,7 +208,7 @@ const History = (() => {
                     <div class="card-head"><h3>Records</h3><span class="card-sub">${records.length}</span></div>
                     ${records.map(r => `
                         <div class="detail-set">
-                            <div class="detail-set-n" style="background:rgba(255,214,10,0.18);color:#FFD60A">PR</div>
+                            <div class="detail-set-n" style="background:#000;color:#fff">PR</div>
                             <div class="grow">
                                 <div style="font-size:.9375rem">${UI.esc(Store.exerciseName(r.exerciseId))}</div>
                                 <div class="tiny muted">${r.type === 'e1rm' ? 'Estimated 1RM' : 'Heaviest set'} &middot; ${Stats.fmtWeight(r.value, { decimals: 1 })} ${Store.unit()}</div>
@@ -230,16 +230,28 @@ const History = (() => {
                 </div>`;
         }
 
+        // superset letters, derived from neighbouring exercises sharing an id
+        const supersetLetter = new Map();
+        let letterIndex = 0;
+        (w.exercises || []).forEach((ex, i, arr) => {
+            if (!ex.supersetId || supersetLetter.has(ex.supersetId)) return;
+            const partners = arr.filter(x => x.supersetId === ex.supersetId);
+            if (partners.length > 1) supersetLetter.set(ex.supersetId, String.fromCharCode(65 + letterIndex++));
+        });
+
         (w.exercises || []).forEach(ex => {
             const meta = Store.exercise(ex.exerciseId);
             const vol = ex.sets.filter(Stats.isWorkingSet).reduce((s, x) => s + Stats.setVolume(x), 0);
+            const ssLetter = ex.supersetId ? supersetLetter.get(ex.supersetId) : null;
             html += `
                 <div class="card">
                     <div class="card-head" style="margin-bottom:8px">
-                        <h3>${UI.esc(meta ? meta.name : 'Unknown exercise')}${recordIds.has(ex.exerciseId) ? '<span class="badge badge-pr">PR</span>' : ''}</h3>
+                        <h3>${UI.esc(meta ? meta.name : 'Unknown exercise')}${ssLetter ? `<span class="badge badge-ss">SS ${ssLetter}</span>` : ''}${recordIds.has(ex.exerciseId) ? '<span class="badge badge-pr">PR</span>' : ''}</h3>
                         <span class="card-sub">${Stats.fmtVolume(vol)} ${Store.unit()}</span>
                     </div>
                     ${ex.notes ? `<div class="detail-note">${UI.esc(ex.notes)}</div>` : ''}
+                    ${ex.notesL ? `<div class="detail-note"><b>L</b> ${UI.esc(ex.notesL)}</div>` : ''}
+                    ${ex.notesR ? `<div class="detail-note"><b>R</b> ${UI.esc(ex.notesR)}</div>` : ''}
                     ${(() => { let n = 0; return ex.sets.map((s) => {
                         if (s.type !== 'warmup') n++;
                         const uni = Stats.isUnilateralSet(s);
@@ -248,9 +260,9 @@ const History = (() => {
                         return `
                             <div class="detail-set">
                                 <div class="detail-set-n">${tag}</div>
-                                <div class="detail-set-val">${Stats.fmtWeight(Stats.setWeight(s))} <span style="font-size:.75rem;color:var(--label-2)">${Store.unit()}</span></div>
+                                <div class="detail-set-val">${Stats.fmtWeight(Stats.setWeight(s))} <span style="font-size:.75rem;color:var(--ink-2)">${Store.unit()}</span></div>
                                 <div class="detail-set-x">&times;</div>
-                                <div class="detail-set-val">${reps} <span style="font-size:.75rem;color:var(--label-2)">reps</span></div>
+                                <div class="detail-set-val">${reps} <span style="font-size:.75rem;color:var(--ink-2)">reps</span></div>
                                 <div class="grow"></div>
                                 <div class="tiny muted">${Stats.fmtWeight(Stats.setE1rm(s), { decimals: 0 })} ${Store.unit()} 1RM</div>
                             </div>`;

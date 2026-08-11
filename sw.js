@@ -1,7 +1,7 @@
 /* Service worker — makes the app usable without a connection.
    Bump CACHE when shipping new assets. */
 
-const CACHE = 'gym-v2.0.0';
+const CACHE = 'gym-v3.0.0';
 
 const ASSETS = [
     './',
@@ -10,7 +10,9 @@ const ASSETS = [
     'js/store.js',
     'js/stats.js',
     'js/charts.js',
+    'js/muscles.js',
     'js/ui.js',
+    'js/nutrition.js',
     'js/picker.js',
     'js/workout.js',
     'js/routines.js',

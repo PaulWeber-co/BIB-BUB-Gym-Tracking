@@ -153,7 +153,7 @@ const Exercises = (() => {
                 el.querySelectorAll('.switch').forEach(sw => {
                     sw.addEventListener('click', () => {
                         sw.classList.toggle('is-on');
-                        UI.haptic(8);
+                        UI.haptic('tap');
                     });
                 });
             },
@@ -180,7 +180,7 @@ const Exercises = (() => {
         let html = `
             <div class="card">
                 <div class="row" style="gap:14px">
-                    ${Picker.avatar(ex).replace('pick-avatar"', 'pick-avatar" style="width:52px;height:52px;border-radius:14px;font-size:1rem"')}
+                    ${Muscles.hero(ex)}
                     <div class="grow">
                         <div class="hist-name">${UI.esc(ex.name)}</div>
                         <div class="hist-date">${UI.esc(ex.muscleGroup)} &middot; ${UI.esc(ex.category)}${ex.isUnilateral ? ' &middot; L/R' : ''}</div>

@@ -1,29 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="r1" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FF7597"/><stop offset="1" stop-color="#FA114F"/>
-    </linearGradient>
-    <linearGradient id="r2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#C8FF3D"/><stop offset="1" stop-color="#5CD000"/>
-    </linearGradient>
-    <linearGradient id="r3" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#5AF3FF"/><stop offset="1" stop-color="#00B8D4"/>
-    </linearGradient>
-  </defs>
-
-  <rect width="512" height="512" rx="112" fill="#000000"/>
-
-  <g transform="translate(256 256)">
-    <circle r="164" fill="none" stroke="#FA114F" stroke-opacity="0.22" stroke-width="48"/>
-    <circle r="164" fill="none" stroke="url(#r1)" stroke-width="48" stroke-linecap="round"
-            stroke-dasharray="1030.4" stroke-dashoffset="180" transform="rotate(-90)"/>
-
-    <circle r="108" fill="none" stroke="#5CD000" stroke-opacity="0.22" stroke-width="48"/>
-    <circle r="108" fill="none" stroke="url(#r2)" stroke-width="48" stroke-linecap="round"
-            stroke-dasharray="678.6" stroke-dashoffset="200" transform="rotate(-90)"/>
-
-    <circle r="52" fill="none" stroke="#00B8D4" stroke-opacity="0.22" stroke-width="48"/>
-    <circle r="52" fill="none" stroke="url(#r3)" stroke-width="48" stroke-linecap="round"
-            stroke-dasharray="326.7" stroke-dashoffset="120" transform="rotate(-90)"/>
-  </g>
+  <!-- Black plate, three stacked bars: the three goal bands, and a barbell
+       loaded from the side. Descending widths read as progress. -->
+  <rect width="512" height="512" fill="#000000"/>
+  <rect x="96"  y="140" width="320" height="66" fill="#2C68C8"/>
+  <rect x="96"  y="223" width="224" height="66" fill="#7FB4DA"/>
+  <rect x="96"  y="306" width="128" height="66" fill="#FFFFFF"/>
 </svg>

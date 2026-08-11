@@ -6,15 +6,9 @@
 
 const Picker = (() => {
 
-    function initials(name) {
-        const words = name.replace(/[()]/g, '').split(/[\s-]+/).filter(Boolean);
-        if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-        return (words[0][0] + words[1][0]).toUpperCase();
-    }
-
+    /** Thumbnail showing the trained muscle group on a body outline. */
     function avatar(ex) {
-        const color = Store.MUSCLE_COLORS[ex.muscleGroup] || Store.MUSCLE_COLORS.Other;
-        return `<div class="pick-avatar" style="background:${color}22;color:${color}">${UI.esc(initials(ex.name))}</div>`;
+        return Muscles.thumb(ex);
     }
 
     /** Exercise ids ordered by how recently they were trained. */
@@ -133,7 +127,7 @@ const Picker = (() => {
                     }
                     const i = picked.indexOf(id);
                     if (i >= 0) picked.splice(i, 1); else picked.push(id);
-                    UI.haptic(8);
+                    UI.haptic('tap');
                     listWrap.querySelectorAll(`.pick-row[data-id="${id}"]`)
                         .forEach(n => n.classList.toggle('is-picked', picked.includes(id)));
                     syncRight();
@@ -173,5 +167,5 @@ const Picker = (() => {
         return sheet;
     }
 
-    return { open, avatar, initials, recentIds };
+    return { open, avatar, recentIds };
 })();

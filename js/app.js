@@ -86,7 +86,7 @@ const App = (() => {
 
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
-                UI.haptic(6);
+                UI.haptic('tap');
                 showTab(tab.dataset.tab);
             });
         });

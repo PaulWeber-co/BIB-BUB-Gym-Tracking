@@ -21,23 +21,34 @@ const Settings = (() => {
         const bytes = Store.storageSize();
         const lastExport = Store.meta().lastExport;
 
+        const proteinTarget = Store.proteinTarget();
+
         el.innerHTML = `
-            <div class="section-title"><h2 style="font-size:1.0625rem">Weekly Goals</h2></div>
+            <div class="section-title"><h2>Goals</h2></div>
             <div class="list">
-                ${stepperRow('Volume', 'goalVolume', Stats.fmtVolume(s.goalVolume) + ' ' + Store.unit(), 'Sum of weight × reps across the week.')}
+                <button class="list-row" data-act="protein">
+                    <div class="list-row-main">
+                        <div class="list-row-title">Protein</div>
+                        <div class="list-row-sub">${proteinTarget === null
+                            ? 'Log a body weight to set a target'
+                            : `${proteinTarget} g per day &middot; ${s.proteinManual > 0 ? 'fixed' : `${s.proteinPerKg} g per kg`}`}</div>
+                    </div>
+                    <svg class="chevron" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
                 ${stepperRow('Workouts', 'goalWorkouts', String(s.goalWorkouts), 'Sessions per week.')}
                 ${stepperRow('Sets', 'goalSets', String(s.goalSets), 'Working sets per week.')}
+                ${stepperRow('Volume', 'goalVolume', Stats.fmtVolume(s.goalVolume) + ' ' + Store.unit(), 'Weekly reference for the volume charts.')}
             </div>
-            <p class="tiny muted">These three goals drive the rings on the summary screen.</p>
+            <p class="tiny muted">Protein, workouts and sets are the three bands on the summary screen.</p>
 
-            <div class="section-title"><h2 style="font-size:1.0625rem">Units</h2></div>
+            <div class="section-title"><h2>Units</h2></div>
             <div class="segmented" data-role="unit">
                 <button data-unit="kg" class="${s.unit === 'kg' ? 'is-active' : ''}">Kilograms</button>
                 <button data-unit="lb" class="${s.unit === 'lb' ? 'is-active' : ''}">Pounds</button>
             </div>
             <p class="tiny muted">Weights are stored in kilograms and converted for display, so switching back and forth is lossless.</p>
 
-            <div class="section-title"><h2 style="font-size:1.0625rem">Training</h2></div>
+            <div class="section-title"><h2>Training</h2></div>
             <div class="list">
                 <div class="switch-row">
                     <div class="switch-row-main">
@@ -70,13 +81,15 @@ const Settings = (() => {
                 <div class="switch-row">
                     <div class="switch-row-main">
                         <div class="switch-row-title">Haptics</div>
-                        <div class="switch-row-sub">Vibration feedback where the browser supports it.</div>
+                        <div class="switch-row-sub">${UI.hasVibration()
+                            ? 'Vibration on set completion and timers.'
+                            : 'Uses the iOS system haptic (17.4 and later). Safari has no vibration API.'}</div>
                     </div>
                     <button class="switch ${s.haptics ? 'is-on' : ''}" data-toggle="haptics" role="switch"></button>
                 </div>
             </div>
 
-            <div class="section-title"><h2 style="font-size:1.0625rem">Apple Health</h2></div>
+            <div class="section-title"><h2>Apple Health</h2></div>
             <div class="list">
                 <button class="list-row" data-act="health-info">
                     <div class="list-row-main">
@@ -94,7 +107,7 @@ const Settings = (() => {
                 </button>
             </div>
 
-            <div class="section-title"><h2 style="font-size:1.0625rem">Data</h2></div>
+            <div class="section-title"><h2>Data</h2></div>
             <div class="list">
                 <button class="list-row" data-act="export">
                     <div class="list-row-main">
@@ -118,14 +131,14 @@ const Settings = (() => {
                 </div>
                 <button class="list-row" data-act="reset">
                     <div class="list-row-main">
-                        <div class="list-row-title" style="color:var(--red)">Delete all data</div>
+                        <div class="list-row-title" style="color:var(--danger)">Delete all data</div>
                         <div class="list-row-sub">Workouts, routines, exercises and settings.</div>
                     </div>
                 </button>
             </div>
             <p class="tiny muted">Everything lives in this browser only. iOS clears the storage of websites you have not opened for a while — add the app to your home screen and export a backup now and then.</p>
 
-            <div class="section-title"><h2 style="font-size:1.0625rem">About</h2></div>
+            <div class="section-title"><h2>About</h2></div>
             <div class="list">
                 <button class="list-row" data-act="install">
                     <div class="list-row-main">
@@ -169,8 +182,8 @@ const Settings = (() => {
                 const key = sw.dataset.toggle;
                 Store.setSetting(key, !Store.settings()[key]);
                 sw.classList.toggle('is-on');
-                UI.haptic(8);
-                if (key === 'sound') UI.unlockAudio();
+                UI.haptic('select');
+                if (key === 'sound' && Store.settings().sound) { UI.unlockAudio(); UI.beep(); }
             });
         });
 
@@ -187,7 +200,7 @@ const Settings = (() => {
                 } else {
                     Store.setSetting(key, Math.min(300, Math.max(5, s.goalSets + dir * 5)));
                 }
-                UI.haptic(6);
+                UI.haptic('tap');
                 rerender();
             });
         });
@@ -224,6 +237,8 @@ const Settings = (() => {
                             if (n > 0) { Store.setSetting('barWeight', Store.toBase(n)); rerender(); }
                         });
                         break;
+
+                    case 'protein': Nutrition.openSheet(); break;
 
                     case 'health-info': healthInfo(); break;
 
