@@ -1,29 +1,63 @@
 /* ============================================================
-   SUMMARY — the landing screen.
-   Three goal bands (protein today, workouts and sets this week),
-   quick start, headline stats, volume chart, records, recent.
+   SUMMARY — Der Dashboard-Bildschirm (Home-Screen der App)
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   summary.js baut die Startseite der App ("Summary"-Tab) auf:
+   1. Drei Activity Rings (Volumen, Workouts, Sätze) für Wochenziele
+   2. "This Week" Streifen mit Tages-Ringen
+   3. Quick-Start (Start Workout, Resume Workout oder Routinen-Chips)
+   4. Kacheln (Goal streak, Tage seit letztem Workout, Volume vs. letzte Woche)
+   5. 14-Tage Volumen-Balkendiagramm
+   6. Neue persönliche Rekorde (PRs)
+   7. Die 3 neuesten Workouts
    ============================================================ */
 
 const Summary = (() => {
 
     const body = () => document.getElementById('summary-body');
 
+    /**
+     * render() — Erzeugt den gesamten Inhalt des Home-Screens.
+     * Baut aus den berechneten Zahlen von Stats und den SVG-Diagrammen
+     * von Charts ein responsives HTML-Dashboard auf.
+     */
     function render() {
         const g = Stats.goals();
         const all = Stats.allTime();
         const now = new Date();
 
-        document.getElementById('summary-day').textContent = now.getDate();
-        document.getElementById('summary-month').textContent =
-            now.toLocaleDateString(undefined, { month: 'short' }).replace('.', '');
+        // Datum im Header setzen (z.B. "Monday, 10 August")
+        document.getElementById('summary-date').textContent =
+            new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+
+        const dailyVolume = Math.max(1, s.goalVolume / Math.max(1, s.goalWorkouts));
+        const dailySets = Math.max(1, s.goalSets / Math.max(1, s.goalWorkouts));
 
         const parts = [];
 
-        // ---- goal bands ----
-        const proteinValue = g.protein.goal === null
-            ? `<span class="goal-value">${g.protein.value}</span><span class="goal-target">g</span>`
-            : `<span class="goal-value">${g.protein.value}</span><span class="goal-target">/${g.protein.goal}g</span>`;
+        // 1. ---- ACTIVITY RINGS ----
+        parts.push(`
+            <div class="card rings-card">
+                <div class="rings-figure">${Charts.rings([r.volume.pct, r.workouts.pct, r.sets.pct], { size: 128, stroke: 12.5 })}</div>
+                <div class="rings-legend">
+                    <div class="legend-item">
+                        <div class="legend-label">Volume</div>
+                        <div class="legend-value lc-1">${Stats.fmtVolume(r.volume.value)}<span class="goal">/${Stats.fmtVolume(r.volume.goal)}</span><span class="unit"> ${Store.unit()}</span></div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-label">Workouts</div>
+                        <div class="legend-value lc-2">${r.workouts.value}<span class="goal">/${r.workouts.goal}</span></div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-label">Sets</div>
+                        <div class="legend-value lc-3">${r.sets.value}<span class="goal">/${r.sets.goal}</span></div>
+                    </div>
+                </div>
+            </div>`);
 
+        // 2. ---- THIS WEEK STRIP ----
         parts.push(`
             <div class="bleed">
                 <button class="goal-band goal-band--1" data-act="protein">
@@ -56,7 +90,7 @@ const Summary = (() => {
                 </button>
             </div>`);
 
-        // ---- start / resume ----
+        // 3. ---- QUICK START / RESUME ----
         if (Workout.isActive()) {
             parts.push(`
                 <button class="btn btn-blue btn-block" data-act="resume" style="margin-top:14px">
@@ -80,7 +114,7 @@ const Summary = (() => {
             }
         }
 
-        // ---- headline stats ----
+        // 4. ---- STATS TILES ----
         const streak = Stats.weekStreak();
         const sinceLast = Stats.daysSinceLastWorkout();
         const weeks = Stats.weeklySeries(2);
@@ -112,7 +146,7 @@ const Summary = (() => {
                 </div>
             </div>`);
 
-        // ---- volume chart ----
+        // 5. ---- 14 DAY VOLUME CHART ----
         if (all.workouts > 0) {
             const daily = Stats.dailySeries(14);
             const bars = daily.map((d, i) => ({
@@ -133,8 +167,8 @@ const Summary = (() => {
                 })}</div>`);
         }
 
-        // ---- records ----
-        const records = Stats.recentRecords(3);
+        // 6. ---- RECENT RECORDS ----
+        const records = Stats.recentRecords(4);
         if (records.length) {
             parts.push(`
                 <div class="section-title"><h2>Records</h2></div>
@@ -150,7 +184,7 @@ const Summary = (() => {
                 </div>`);
         }
 
-        // ---- recent ----
+        // 7. ---- RECENT WORKOUTS ----
         const recent = Store.workouts().slice(0, 3);
         parts.push(`
             <div class="section-title">
@@ -187,6 +221,9 @@ const Summary = (() => {
         body().innerHTML = parts.join('');
     }
 
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Klick-Handler für Schnellstarts & Navigationslinks
+       ────────────────────────────────────────────────────────── */
     function bind() {
         body().addEventListener('click', (e) => {
             const btn = e.target.closest('[data-act]');

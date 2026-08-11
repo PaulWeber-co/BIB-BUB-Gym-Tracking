@@ -1,17 +1,57 @@
 /* ============================================================
-   PICKER — exercise selection sheet.
-   Multi select, search, muscle filter and a "recent" section so
-   the exercises you actually train are one tap away.
+   PICKER — Übungs-Auswahlmenü mit Suche und Filtern
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   Wenn du im Workout auf "Add Exercise" tippst, öffnet sich der
+   Picker — ein Vollbild-Sheet mit:
+   - Suchfeld (nach Name suchen)
+   - Muskelgruppen-Filter (Chips: All, Chest, Back, Legs, ...)
+   - "Recent" Sektion (zuletzt benutzte Übungen)
+   - Alphabetische Liste aller Übungen
+   - Multi-Select-Modus (mehrere Übungen gleichzeitig auswählen)
+   - "Create New Exercise" Button am Ende
+
+   WANN WIRD DER PICKER VERWENDET?
+   ─────────────────────────────────
+   - workout.js:   "Add Exercise" im laufenden Workout
+   - routines.js:  "Add Exercise" beim Routine-Editor
+   - trends.js:    Übung auswählen für die Fortschrittsgraphen
+   - exercises.js: Übung auswählen für die Detailansicht
    ============================================================ */
 
 const Picker = (() => {
 
-    /** Thumbnail showing the trained muscle group on a body outline. */
+    /**
+     * initials(name) — Erzeugt 1-2 Buchstaben als Initialen.
+     * "Bench Press" → "BP", "Squat" → "SQ"
+     * Wird für den farbigen Avatar-Kreis links neben jeder Übung verwendet.
+     */
+    function initials(name) {
+        const words = name.replace(/[()]/g, '').split(/[\s-]+/).filter(Boolean);
+        if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+        return (words[0][0] + words[1][0]).toUpperCase();
+    }
+
+    /**
+     * avatar(ex) — Erzeugt den farbigen Kreis mit Initialen.
+     * Die Farbe richtet sich nach der Muskelgruppe:
+     * Chest = Rot, Back = Blau, Legs = Lila, usw.
+     */
     function avatar(ex) {
         return Muscles.thumb(ex);
     }
 
-    /** Exercise ids ordered by how recently they were trained. */
+    /**
+     * recentIds(limit) — Gibt die IDs der zuletzt trainierten Übungen zurück.
+     *
+     * WIE?
+     * Geht durch alle Workouts (neueste zuerst) und sammelt die
+     * Übungs-IDs. Die zuerst gefundene ID wird als "neueste" eingestuft.
+     * Duplikate werden übersprungen.
+     * Ergebnis: z.B. ["ex-bench-press", "ex-squat", "ex-deadlift", ...]
+     */
     function recentIds(limit = 6) {
         const seen = [];
         Store.workouts().forEach(w => {
@@ -23,14 +63,27 @@ const Picker = (() => {
     }
 
     /**
-     * options: { multi = true, title, onPick(ids) }
+     * open(options) — Öffnet den Exercise Picker.
+     *
+     * @param {Object} options
+     *   - multi:   true = mehrere Übungen auswählen (Standard)
+     *              false = nur eine auswählen
+     *   - title:   Titel des Sheets
+     *   - onPick:  Callback mit Array der ausgewählten IDs
+     *
+     * ABLAUF:
+     * 1. Sheet öffnen mit Suchfeld und Filter-Chips
+     * 2. Bei jeder Eingabe/Filter-Änderung → Liste neu rendern
+     * 3. Im Multi-Modus: Klick = auswählen/abwählen, "Add (n)" = fertig
+     * 4. Im Single-Modus: Klick = sofort auswählen und schließen
      */
     function open(options = {}) {
         const multi = options.multi !== false;
-        const picked = [];
-        let query = '';
-        let muscle = '';
+        const picked = [];    // Array der ausgewählten Übungs-IDs
+        let query = '';       // Aktueller Suchtext
+        let muscle = '';      // Aktueller Muskelgruppen-Filter
 
+        // Sheet (Vollbild-Panel) öffnen
         const sheet = UI.sheet({
             title: options.title || 'Add Exercise',
             left: 'Cancel',
@@ -38,12 +91,13 @@ const Picker = (() => {
             full: true,
             noPad: true,
             onRight: (api) => {
-                if (picked.length === 0) return;
+                if (picked.length === 0) return;  // Nichts ausgewählt
                 api.close();
-                if (options.onPick) options.onPick(picked.slice());
+                if (options.onPick) options.onPick(picked.slice()); // Kopie übergeben
             },
         });
 
+        // ---- Kopfbereich: Suchfeld + Muskelgruppen-Chips ----
         const head = UI.el(`
             <div style="padding:0 16px 10px;display:flex;flex-direction:column;gap:10px">
                 <div class="search-field">
@@ -56,24 +110,34 @@ const Picker = (() => {
                 </div>
             </div>`);
 
+        // ---- Liste der Übungen ----
         const listWrap = UI.el('<div data-role="list"></div>');
+
+        // ---- "Create New Exercise" Button ----
         const foot = UI.el(`
             <div style="padding:10px 16px 4px">
                 <button class="btn btn-tint btn-block" data-role="new">Create New Exercise</button>
             </div>`);
 
+        // Alles ins Sheet einfügen
         sheet.body.appendChild(head);
         sheet.body.appendChild(listWrap);
         sheet.body.appendChild(foot);
 
         const rightBtn = sheet.root.querySelector('[data-role="right"]');
 
+        /** syncRight() — Aktualisiert den "Add (n)"-Button Text. */
         function syncRight() {
             if (!rightBtn || !multi) return;
             rightBtn.textContent = picked.length ? `Add (${picked.length})` : 'Add';
             rightBtn.style.opacity = picked.length ? '1' : '0.4';
         }
 
+        /**
+         * row(ex) — Erzeugt eine Zeile für eine Übung.
+         * Zeigt: Avatar, Name, Badges (Custom/L/R), Muskelgruppe, Kategorie.
+         * Im Multi-Modus: Checkbox rechts. Im Single-Modus: Pfeil rechts.
+         */
         function row(ex) {
             const isPicked = picked.includes(ex.id);
             return `
@@ -89,10 +153,21 @@ const Picker = (() => {
                 </button>`;
         }
 
+        /**
+         * render() — Baut die gesamte Liste neu auf.
+         *
+         * ABLAUF:
+         * 1. Wenn kein Filter aktiv → "Recent" Sektion anzeigen
+         * 2. Alle Übungen durchsuchen (Store.searchExercises)
+         * 3. Bei Ergebnissen: alphabetisch mit Buchstaben-Gruppierung
+         * 4. Keine Ergebnisse: "Nothing found" Hinweis
+         * 5. Klick-Handler für jede Zeile registrieren
+         */
         function render() {
             const results = Store.searchExercises(query, muscle);
             let html = '';
 
+            // "Recent"-Bereich nur ohne aktive Filter anzeigen
             if (!query && !muscle) {
                 const recents = recentIds().map(id => Store.exercise(id)).filter(Boolean);
                 if (recents.length) {
@@ -108,6 +183,7 @@ const Picker = (() => {
                 html += (!query && !muscle) ? '<div class="list-letter">All Exercises</div>' : '';
                 results.forEach(ex => {
                     const first = ex.name[0].toUpperCase();
+                    // Buchstaben-Gruppierung (A, B, C, ...)
                     if (query === '' && first !== letter) {
                         letter = first;
                         html += `<div class="list-letter">${UI.esc(letter)}</div>`;
@@ -117,17 +193,24 @@ const Picker = (() => {
             }
 
             listWrap.innerHTML = html;
+
+            // Klick-Handler für jede Übungs-Zeile
             listWrap.querySelectorAll('.pick-row').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const id = btn.dataset.id;
+
+                    // Single-Modus: sofort auswählen und schließen
                     if (!multi) {
                         sheet.close();
                         if (options.onPick) options.onPick([id]);
                         return;
                     }
+
+                    // Multi-Modus: auswählen oder abwählen (toggle)
                     const i = picked.indexOf(id);
                     if (i >= 0) picked.splice(i, 1); else picked.push(id);
-                    UI.haptic('tap');
+                    UI.haptic(8);
+                    // Visuelles Feedback: alle Zeilen mit dieser ID aktualisieren
                     listWrap.querySelectorAll(`.pick-row[data-id="${id}"]`)
                         .forEach(n => n.classList.toggle('is-picked', picked.includes(id)));
                     syncRight();
@@ -135,11 +218,13 @@ const Picker = (() => {
             });
         }
 
+        // ---- Event-Listener: Suche ----
         head.querySelector('[data-role="q"]').addEventListener('input', (e) => {
             query = e.target.value;
             render();
         });
 
+        // ---- Event-Listener: Muskelgruppen-Filter ----
         head.querySelectorAll('.chip').forEach(chip => {
             chip.addEventListener('click', () => {
                 muscle = chip.dataset.muscle;
@@ -148,6 +233,7 @@ const Picker = (() => {
             });
         });
 
+        // ---- Event-Listener: Neue Übung erstellen ----
         foot.querySelector('[data-role="new"]').addEventListener('click', () => {
             Exercises.openEditor(null, (created) => {
                 if (!created) return;
@@ -159,7 +245,7 @@ const Picker = (() => {
                     sheet.close();
                     if (options.onPick) options.onPick([created.id]);
                 }
-            }, query);
+            }, query);  // Suchtext als Vorschlag für den Namen übergeben
         });
 
         syncRight();
@@ -167,5 +253,8 @@ const Picker = (() => {
         return sheet;
     }
 
-    return { open, avatar, recentIds };
+    /* ──────────────────────────────────────────────────────────
+       PUBLIC API
+       ────────────────────────────────────────────────────────── */
+    return { open, avatar, initials, recentIds };
 })();

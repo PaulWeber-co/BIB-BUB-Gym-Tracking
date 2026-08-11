@@ -1,54 +1,130 @@
 /* ============================================================
-   UI — sheets, alerts, action sheets, toasts, feedback.
-   Everything is built on the same backdrop element so that a
-   single Escape / back gesture closes the top-most layer.
+   UI — Benutzeroberflächen-Bausteine (Sheets, Alerts, Toasts)
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   UI stellt wiederverwendbare "Bauteile" bereit, die von allen
+   anderen Modulen benutzt werden:
+
+   - Sheet:        Ein Panel, das von unten hochfährt (wie in iOS)
+   - Action Sheet: Eine Liste mit Auswahlmöglichkeiten
+   - Alert:        "OK"-Dialog mit einer Nachricht
+   - Confirm:      "Ja/Nein"-Dialog
+   - Prompt:       Dialog mit Texteingabe
+   - Toast:        Kurze Nachricht, die automatisch verschwindet
+   - Haptic:       Vibration als Feedback
+   - Beep:         Kurzer Ton (Rest-Timer Ende)
+
+   WIE FUNKTIONIERT DAS LAYER-SYSTEM?
+   ──────────────────────────────────
+   Jedes Sheet/Alert/ActionSheet ist ein "Layer" (Schicht).
+   Wenn du ein Sheet öffnest, wird ein halbtransparenter Hintergrund
+   (Backdrop) erzeugt und darüber das Sheet gelegt. Mehrere Sheets
+   können übereinander gestapelt werden. Ein Klick auf den Hintergrund
+   oder die Escape-Taste schließt die oberste Schicht.
    ============================================================ */
 
 const UI = (() => {
 
+    /** host() — Das <div> im HTML, in das alle Sheets/Alerts eingefügt werden. */
     const host = () => document.getElementById('sheet-host');
+
+    /** layers — Ein Array aller offenen Schichten (Stack: letzter = oberster). */
     const layers = [];
 
+    /**
+     * esc(value) — "Escaped" einen String für sicheres HTML.
+     *
+     * WARUM?
+     * Wenn ein Benutzer eine Übung "Bench <script>hack</script>" nennt,
+     * würde das ohne Escaping als echtes HTML/JavaScript interpretiert.
+     * Diese Funktion ersetzt alle gefährlichen Zeichen:
+     *   & → &amp;   < → &lt;   > → &gt;   " → &quot;   ' → &#39;
+     *
+     * So wird der Text immer als reiner Text angezeigt, nie als Code.
+     */
     function esc(value) {
         return String(value === null || value === undefined ? '' : value)
             .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
+    /**
+     * el(html) — Wandelt einen HTML-String in ein echtes DOM-Element um.
+     *
+     * WIE?
+     * 1. Erstelle ein <template>-Element (unsichtbar)
+     * 2. Setze den HTML-String als innerHTML
+     * 3. Der Browser parst es automatisch in echte Elemente
+     * 4. Gib das erste Kind-Element zurück
+     *
+     * Beispiel: el('<div class="test">Hallo</div>') → ein <div>-Element
+     */
     function el(html) {
         const t = document.createElement('template');
         t.innerHTML = html.trim();
         return t.content.firstElementChild;
     }
 
+    /**
+     * lockScroll(lock) — Verhindert oder erlaubt Scrollen im Hintergrund.
+     * Wenn ein Sheet offen ist, soll man nicht im Hintergrund scrollen können.
+     */
     function lockScroll(lock) {
         document.body.style.overflow = lock ? 'hidden' : '';
     }
 
-    // ---------- generic layer ----------
+    /* ──────────────────────────────────────────────────────────
+       GENERIC LAYER — Die Basis für Sheets, Alerts und Action Sheets.
+       Erzeugt einen Backdrop (halbtransparenten Hintergrund) und
+       legt das übergebene Element darüber.
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * openLayer(node, options) — Öffnet eine neue UI-Schicht.
+     *
+     * @param {Element} node         - Das HTML-Element, das angezeigt werden soll
+     * @param {Object}  options
+     *   - onClose:      Callback wenn die Schicht geschlossen wird
+     *   - dismissible:  Kann durch Klick auf den Hintergrund geschlossen werden?
+     *   - wrapClass:    Zusätzliche CSS-Klasse für den Backdrop
+     *
+     * @returns {{ close(result) }} Ein Objekt mit einer close()-Methode
+     */
     function openLayer(node, { onClose, dismissible = true, wrapClass = '' } = {}) {
+        // Backdrop erstellen (der dunkle Hintergrund)
         const backdrop = el(`<div class="backdrop ${wrapClass}"></div>`);
         backdrop.appendChild(node);
         host().appendChild(backdrop);
         lockScroll(true);
 
-        // next frame so the transition runs
+        // requestAnimationFrame wartet einen Frame ab, damit die
+        // CSS-Transition (Einblenden) korrekt läuft.
         requestAnimationFrame(() => backdrop.classList.add('is-open'));
 
+        // Layer-Objekt mit close()-Methode
         const layer = {
             backdrop,
             close(result) {
+                // Aus dem Stack entfernen
                 const i = layers.indexOf(layer);
                 if (i >= 0) layers.splice(i, 1);
+
+                // Ausblende-Animation starten
                 backdrop.classList.remove('is-open');
+
+                // Nach der Animation aus dem DOM entfernen
                 setTimeout(() => {
                     backdrop.remove();
-                    if (layers.length === 0) lockScroll(false);
+                    if (layers.length === 0) lockScroll(false); // Scrollen wieder erlauben
                 }, 320);
+
                 if (onClose) onClose(result);
             },
         };
         layers.push(layer);
 
+        // Klick auf den Backdrop → oberste Schicht schließen
         if (dismissible) {
             backdrop.addEventListener('click', (e) => {
                 if (e.target === backdrop) layer.close();
@@ -57,6 +133,11 @@ const UI = (() => {
         return layer;
     }
 
+    /**
+     * closeTop() — Schließt die oberste offene Schicht.
+     * Wird von app.js für die "Zurück"-Geste verwendet.
+     * @returns {boolean} true wenn etwas geschlossen wurde
+     */
     function closeTop() {
         if (layers.length) {
             layers[layers.length - 1].close();
@@ -65,10 +146,25 @@ const UI = (() => {
         return false;
     }
 
-    // ---------- sheet ----------
+    /* ──────────────────────────────────────────────────────────
+       SHEET — Panel, das von unten hochfährt (wie ein iOS Sheet).
+       Wird für: Übung erstellen, Settings, Workout-Summary usw.
+       ────────────────────────────────────────────────────────── */
+
     /**
-     * options: { title, left, right, full, onRight, onLeft, build(bodyEl, sheet), noPad }
-     * Returns { close, body, root }
+     * sheet(options) — Öffnet ein Sheet (Slide-Up Panel).
+     *
+     * @param {Object} options
+     *   - title:   Titel in der Leiste
+     *   - left:    Text des linken Buttons (z.B. "Cancel")
+     *   - right:   Text des rechten Buttons (z.B. "Save")
+     *   - full:    true = Sheet nimmt den ganzen Bildschirm ein
+     *   - onRight: Callback wenn der rechte Button geklickt wird
+     *   - onLeft:  Callback wenn der linke Button geklickt wird
+     *   - build:   Funktion, die den Inhalt des Sheets erzeugt
+     *   - noPad:   true = kein Padding im Body
+     *
+     * @returns {{ close, body, root }} API zum Steuern des Sheets
      */
     function sheet(options = {}) {
         const node = el(`
@@ -86,8 +182,10 @@ const UI = (() => {
         const layer = openLayer(node, { onClose: options.onClose });
         const body = node.querySelector('[data-role="body"]');
 
+        // API-Objekt, das der Aufrufer zurückbekommt
         const api = { close: (r) => layer.close(r), body, root: node };
 
+        // Linker Button (meist "Cancel" oder "Done")
         const leftBtn = node.querySelector('[data-role="left"]');
         if (leftBtn) {
             leftBtn.addEventListener('click', () => {
@@ -95,17 +193,31 @@ const UI = (() => {
                 else api.close();
             });
         }
+
+        // Rechter Button (meist "Save" oder "Add")
         const rightBtn = node.querySelector('[data-role="right"]');
         if (rightBtn && options.right) {
             rightBtn.addEventListener('click', () => options.onRight && options.onRight(api));
         }
 
+        // build() erzeugt den eigentlichen Inhalt
         if (options.build) options.build(body, api);
         return api;
     }
 
-    // ---------- action sheet ----------
-    /** actions: [{ label, onSelect, destructive, plain }] */
+    /* ──────────────────────────────────────────────────────────
+       ACTION SHEET — Liste mit Auswahlmöglichkeiten (wie iOS).
+       Wird für: Übungs-Menü, Satz-Typ wählen, Routine-Optionen usw.
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * actionSheet(options) — Zeigt eine Auswahlliste von unten.
+     *
+     * @param {Object} options
+     *   - title:   Überschrift
+     *   - message: Erklärungstext
+     *   - actions: Array von { label, onSelect, destructive, plain }
+     */
     function actionSheet({ title, message, actions = [], cancelLabel = 'Cancel' } = {}) {
         const node = el(`
             <div class="action-sheet">
@@ -121,18 +233,29 @@ const UI = (() => {
             </div>`);
 
         const layer = openLayer(node);
+
+        // Jede Aktion bekommt einen Klick-Handler
         node.querySelectorAll('.action-item').forEach(btn => {
             btn.addEventListener('click', () => {
                 const action = actions[Number(btn.dataset.i)];
                 layer.close();
+                // setTimeout damit die Schließ-Animation fertig ist
                 if (action && action.onSelect) setTimeout(() => action.onSelect(), 180);
             });
         });
+
         node.querySelector('[data-role="cancel"]').addEventListener('click', () => layer.close());
         return layer;
     }
 
-    // ---------- alert / confirm ----------
+    /* ──────────────────────────────────────────────────────────
+       ALERT / CONFIRM / PROMPT — Standard-Dialoge
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * alert() — Zeigt eine Nachricht mit einem "OK"-Button.
+     * Gibt ein Promise zurück, das resolved wenn OK geklickt wird.
+     */
     function alertBox({ title, message, okLabel = 'OK' } = {}) {
         return new Promise(resolve => {
             const node = el(`
@@ -150,6 +273,10 @@ const UI = (() => {
         });
     }
 
+    /**
+     * confirm() — "Bist du sicher?"-Dialog mit Cancel und Confirm.
+     * Gibt ein Promise zurück: true = bestätigt, false = abgebrochen.
+     */
     function confirm({ title, message, confirmLabel = 'OK', cancelLabel = 'Cancel', destructive = false } = {}) {
         return new Promise(resolve => {
             let result = false;
@@ -170,6 +297,10 @@ const UI = (() => {
         });
     }
 
+    /**
+     * prompt() — Dialog mit Texteingabefeld.
+     * Gibt ein Promise zurück: der eingegebene Text oder null bei Cancel.
+     */
     function prompt({ title, message, value = '', placeholder = '', inputmode = 'text', confirmLabel = 'Save' } = {}) {
         return new Promise(resolve => {
             let result = null;
@@ -197,14 +328,24 @@ const UI = (() => {
         });
     }
 
-    // ---------- toast ----------
+    /* ──────────────────────────────────────────────────────────
+       TOAST — Kurze Benachrichtigung, die automatisch verschwindet.
+       Erscheint oben am Bildschirm (z.B. "Personal Record!" oder
+       "Routine saved").
+       ────────────────────────────────────────────────────────── */
+
+    /** TONES — Voreinstellungen für verschiedene Toast-Typen (Farbe + Icon). */
     const TONES = {
-        info: { color: '#7FB4DA', icon: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><line x1="12" y1="7.6" x2="12" y2="7.7"/>' },
-        success: { color: '#7FB4DA', icon: '<polyline points="20 6 9 17 4 12"/>' },
-        record: { color: '#FFFFFF', icon: '<polygon points="12 2.6 14.9 8.5 21.4 9.4 16.7 14 17.8 20.5 12 17.4 6.2 20.5 7.3 14 2.6 9.4 9.1 8.5"/>' },
-        warn: { color: '#F2C14E', icon: '<path d="M12 3 2.5 20h19z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17.1"/>' },
+        info:    { bg: 'rgba(10,132,255,0.22)',  color: '#5AC8FA', icon: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/>' },
+        success: { bg: 'rgba(48,209,88,0.22)',   color: '#30D158', icon: '<polyline points="20 6 9 17 4 12"/>' },
+        record:  { bg: 'rgba(255,214,10,0.2)',   color: '#FFD60A', icon: '<polygon points="12 2.6 14.9 8.5 21.4 9.4 16.7 14 17.8 20.5 12 17.4 6.2 20.5 7.3 14 2.6 9.4 9.1 8.5"/>' },
+        warn:    { bg: 'rgba(255,159,10,0.2)',   color: '#FF9F0A', icon: '<path d="M12 3 2.5 20h19z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17"/>' },
     };
 
+    /**
+     * toast() — Zeigt eine kurze Nachricht an, die nach 'duration' ms
+     * automatisch verschwindet.
+     */
     function toast({ title, sub, tone = 'info', duration = 2600 } = {}) {
         const t = TONES[tone] || TONES.info;
         const node = el(`
@@ -219,17 +360,27 @@ const UI = (() => {
                 </div>
             </div>`);
         document.getElementById('toast-host').appendChild(node);
+
+        // Nach 'duration' ms die Ausblende-Animation starten
         setTimeout(() => {
             node.classList.add('is-out');
-            setTimeout(() => node.remove(), 300);
+            setTimeout(() => node.remove(), 300);  // Dann aus dem DOM entfernen
         }, duration);
         return node;
     }
 
-    // ---------- feedback ----------
-    let audioCtx = null;
-    let hapticLabel = null;
+    /* ──────────────────────────────────────────────────────────
+       FEEDBACK — Sound und Vibration
+       ────────────────────────────────────────────────────────── */
 
+    let audioCtx = null;     // Web Audio API Kontext (für Töne)
+    let hapticLabel = null;  // Verstecktes Element für iOS-Haptik
+
+    /**
+     * ensureAudio() — Erstellt den Audio-Kontext (falls noch nicht vorhanden).
+     * Der Web Audio API Kontext ist wie ein Mischpult, über das wir
+     * programmatisch Töne erzeugen können.
+     */
     function ensureAudio() {
         if (audioCtx) return audioCtx;
         const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -238,7 +389,16 @@ const UI = (() => {
         return audioCtx;
     }
 
-    /** Short tone. iOS needs a preceding user gesture, which unlocking handles. */
+    /**
+     * beep(times) — Spielt einen kurzen Ton ab (880 Hz Sinuswelle).
+     * Wird verwendet, wenn der Rest-Timer abgelaufen ist.
+     *
+     * WIE FUNKTIONIERT DAS?
+     * 1. Erstelle einen Oszillator (erzeugt eine Tonwelle)
+     * 2. Erstelle einen Gain-Node (regelt die Lautstärke)
+     * 3. Verbinde: Oszillator → Gain → Lautsprecher
+     * 4. Starte den Ton und stoppe ihn nach 0.2 Sekunden
+     */
     function beep(times = 1) {
         if (!Store.settings().sound) return;
         const ctx = ensureAudio();
@@ -259,39 +419,44 @@ const UI = (() => {
         }
     }
 
-    /* ---------- haptics ----------
-       Two mechanisms, both no-ops where unsupported:
-       - navigator.vibrate covers Android and desktop Chrome.
-       - Safari has no Vibration API. Toggling a `switch` checkbox is the one
-         control iOS gives a system haptic to (17.4+), so a hidden one is
-         driven from a real user gesture. Sound is never used as a stand-in.  */
-    const PATTERNS = {
-        tap: 8,
-        select: 12,
-        impact: 20,
-        success: [14, 60, 14],
-        warn: [26, 70, 26],
-        alarm: [180, 90, 180],
-    };
-
-    function hapticSwitch() {
-        if (hapticLabel) return hapticLabel;
-        const wrap = el(`<div aria-hidden="true" style="position:fixed;left:-20px;top:-20px;width:1px;height:1px;overflow:hidden;pointer-events:none;opacity:0">
-            <input type="checkbox" switch id="ui-haptic-input" tabindex="-1">
-            <label for="ui-haptic-input" id="ui-haptic-label"></label>
-        </div>`);
-        document.body.appendChild(wrap);
-        hapticLabel = wrap.querySelector('#ui-haptic-label');
-        return hapticLabel;
-    }
-
-    /** intent: tap | select | impact | success | warn | alarm */
-    function haptic(intent = 'tap') {
+    /**
+     * haptic(pattern) — Erzeugt eine Vibration.
+     *
+     * Auf Android: navigator.vibrate() funktioniert direkt.
+     * Auf iOS: Die Vibration-API ist nicht verfügbar. Stattdessen
+     * klicken wir ein verstecktes <input type="checkbox" switch>,
+     * was auf iOS 17.4+ eine System-Haptik auslöst.
+     *
+     * @param {number|number[]} pattern - Dauer in ms (oder Array für Muster)
+     */
+    function haptic(pattern = 12) {
         if (!Store.settings().haptics) return;
-        const pattern = typeof intent === 'string' ? (PATTERNS[intent] || PATTERNS.tap) : intent;
-
-        if (typeof navigator.vibrate === 'function') {
-            try { navigator.vibrate(pattern); } catch (e) { /* unsupported */ }
+        if (navigator.vibrate) {
+            try { navigator.vibrate(pattern); } catch (e) { /* ignore */ }
+        }
+        try {
+            const ctx = ensureAudio();
+            if (ctx && ctx.state === 'running') {
+                const t0 = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, t0);
+                osc.frequency.exponentialRampToValueAtTime(300, t0 + 0.007);
+                gain.gain.setValueAtTime(0.03, t0);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.007);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(t0);
+                osc.stop(t0 + 0.008);
+            }
+        } catch (e) { /* ignore */ }
+        if (!hapticLabel) {
+            const wrap = el(`<div style="position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;left:-10px;top:-10px">
+                <input type="checkbox" switch id="ui-haptic-input">
+                <label for="ui-haptic-input" id="ui-haptic-label"></label>
+            </div>`);
+            document.body.appendChild(wrap);
+            hapticLabel = document.getElementById('ui-haptic-label');
         }
         try { hapticSwitch().click(); } catch (e) { /* unsupported */ }
     }
@@ -301,27 +466,44 @@ const UI = (() => {
         return typeof navigator.vibrate === 'function';
     }
 
+    /**
+     * unlockAudio() — "Entsperrt" den Audio-Kontext.
+     * iOS Safari erlaubt Sound nur nach einer Benutzer-Interaktion.
+     * Diese Funktion wird beim ersten Tippen aufgerufen.
+     */
     function unlockAudio() {
         const ctx = ensureAudio();
         if (ctx && ctx.state === 'suspended') ctx.resume();
     }
 
-    // ---------- full screen helpers ----------
+    /* ──────────────────────────────────────────────────────────
+       FULLSCREEN HELPERS — Für Screens, die den ganzen Bildschirm
+       einnehmen (Workout, Routine-Editor, Workout-Detail usw.)
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * openScreen(id) — Öffnet einen Fullscreen-Screen mit Slide-Animation.
+     * Versteckt gleichzeitig die Tab-Bar und die Mini-Workout-Bar.
+     */
     function openScreen(id) {
         const node = document.getElementById(id);
         if (!node) return;
         node.classList.add('is-open', 'is-mounting');
-        void node.offsetHeight;
+        void node.offsetHeight;  // "Force reflow" damit die CSS-Transition startet
         node.classList.remove('is-mounting');
         document.getElementById('tab-bar').hidden = true;
         document.getElementById('mini-workout').hidden = true;
         lockScroll(true);
     }
 
+    /**
+     * closeScreen(id) — Schließt einen Fullscreen-Screen mit Slide-Animation.
+     * Wenn kein anderer Screen mehr offen ist → Tab-Bar wieder anzeigen.
+     */
     function closeScreen(id) {
         const node = document.getElementById(id);
         if (!node || !node.classList.contains('is-open')) return;
-        node.classList.add('is-mounting');
+        node.classList.add('is-mounting');  // Slide-Out Animation
         setTimeout(() => {
             node.classList.remove('is-open', 'is-mounting');
             const anyOpen = document.querySelector('.screen.is-open');
@@ -334,19 +516,38 @@ const UI = (() => {
         }, 340);
     }
 
+    /** screenOpen(id) — Prüft ob ein bestimmter Screen gerade offen ist. */
     function screenOpen(id) {
         const node = document.getElementById(id);
         return !!node && node.classList.contains('is-open');
     }
 
-    // ---------- misc ----------
-    /** Parses "82,5" as well as "82.5". */
+    /* ──────────────────────────────────────────────────────────
+       MISC — Sonstige Hilfsfunktionen
+       ────────────────────────────────────────────────────────── */
+
+    /**
+     * num(value) — Parst einen String zu einer Zahl.
+     * Unterstützt sowohl Punkt als auch Komma als Dezimaltrenner.
+     * "82,5" → 82.5 (nützlich für deutsche Eingabe)
+     */
     function num(value) {
         if (value === null || value === undefined) return 0;
         const n = parseFloat(String(value).replace(',', '.'));
         return Number.isFinite(n) ? n : 0;
     }
 
+    /**
+     * download(filename, text) — Erzeugt eine Datei und lädt sie herunter.
+     * Wird für den Backup-Export verwendet.
+     *
+     * WIE?
+     * 1. Erstelle einen Blob (Binärdaten-Objekt) aus dem Text
+     * 2. Erzeuge eine temporäre URL dafür
+     * 3. Erstelle einen unsichtbaren <a>-Link mit download-Attribut
+     * 4. Klicke den Link programmatisch → Browser lädt die Datei herunter
+     * 5. Räume auf (URL freigeben, Link entfernen)
+     */
     function download(filename, text, type = 'application/json') {
         const blob = new Blob([text], { type });
         const url = URL.createObjectURL(blob);
@@ -358,7 +559,10 @@ const UI = (() => {
         setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
     }
 
-    /** Adds the hairline under a nav bar once its view is scrolled. */
+    /**
+     * bindScrollShadow(scroller, bar) — Zeigt einen Schatten unter
+     * einer Navigationsleiste, wenn der Inhalt gescrollt wird.
+     */
     function bindScrollShadow(scroller, bar) {
         if (!scroller || !bar) return;
         const onScroll = () => bar.classList.toggle('is-scrolled', scroller.scrollTop > 4);
@@ -366,6 +570,9 @@ const UI = (() => {
         onScroll();
     }
 
+    /* ──────────────────────────────────────────────────────────
+       PUBLIC API
+       ────────────────────────────────────────────────────────── */
     return {
         esc, el, sheet, actionSheet, alert: alertBox, confirm, prompt, toast,
         beep, haptic, hasVibration, unlockAudio, openScreen, closeScreen, screenOpen, closeTop,

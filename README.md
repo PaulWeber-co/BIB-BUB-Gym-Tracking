@@ -1,127 +1,375 @@
-# Gym Tracker
+# 💪 BIB-BUB Gym Tracker
 
-A workout tracker for the phone. Flat editorial design: paper background, blue and navy bands,
-black blocks, square corners, uppercase type. No frameworks, no build step, no server, no account —
-everything lives in the browser.
+A gym workout tracking web app – track exercises, create routines, and monitor your progress.
+Works 100 % offline, no account needed, no server – all data stays in your browser.
 
-**[Open the app →](https://paulweber-co.github.io/BIB-BUB-Gym-Tracking/)**
+**[Live Demo →](https://paulweber-co.github.io/BIB-BUB-Gym-Tracking/)**
 
-## Screens
+---
 
-| | |
+## 📖 What is this app?
+
+This is a **Progressive Web App (PWA)** that works like the Strong app on iOS.
+You can install it on your iPhone home screen and use it like a native app –
+it runs without internet and keeps your data safe in the browser.
+
+### What can it do?
+
+| Feature | Description |
 |---|---|
-| **Summary** | Three goal bands (protein today, workouts and sets this week), quick start, headline stats, 14-day volume, records, recent sessions |
-| **Workout** | Routines and the live training screen |
-| **History** | Training calendar as a block grid, month totals, searchable session list |
-| **Trends** | 12-week training load, per-exercise progression, muscle split, body weight, protein |
-| **Exercises** | 60+ built-in exercises plus your own, each with a muscle diagram, history and records |
+| 🏋️ **Workout Tracking** | Start a workout, add exercises, log weight + reps for every set |
+| 📝 **Routines** | Save workout templates (e.g. "Push Day") and restart them with one tap |
+| 🔄 **Unilateral Support** | Track left / right side separately for exercises like Dumbbell Curls |
+| 📊 **Progress Charts** | See your estimated 1RM, volume and strength trend over time |
+| ⏱️ **Rest Timer** | Automatic timer after each set with adjustable duration |
+| 📅 **History & Calendar** | Calendar view and list of all past workouts |
+| 🏅 **Personal Records** | Automatic PR detection with notification |
+| 📦 **Backup & Restore** | Export / import all data as a JSON file |
+| ⚙️ **Settings** | kg / lb toggle, weekly goals, bar weight for plate calculator |
 
-## Training screen
+---
 
-- **Previous column** — what you lifted last time, per set, warm-ups matched to warm-ups. Tap to copy the numbers in.
-- **Prefilled sets** — a new exercise starts with the sets from your last session, so logging is mostly tapping the checkmark.
-- **Supersets** — link an exercise with the next one. Completing a set jumps to the partner exercise; the rest timer only starts once the round is done.
-- **Set types** — tap the set number for warm-up, drop set or to failure. Warm-ups are excluded from volume, records and the rest timer.
-- **Rest timer** — a bar at the bottom rather than a blocking dialog, with per-exercise durations, ±15 s and skip.
-- **Live PR detection** — beat your estimated 1RM or your heaviest set and you are told while it happens.
-- **Left / right tracking** — unilateral exercises log both sides separately, including **separate notes per side**.
-- **Plate calculator** — what to load per side for barbell lifts.
-- **Crash safe** — the running workout is written to storage after every change. Reload, take a call, let iOS discard the tab: it comes back with the clock running.
-- **Minimize** — leave the workout running and browse the rest of the app; a bar at the bottom takes you back.
+## 🗂️ Project Structure – What does each file do?
 
-## Protein
+```
+BIB-BUB-Gym-Tracking/
+│
+├── index.html              ← The only HTML page (Single Page App)
+├── manifest.webmanifest    ← Tells the browser this is an installable app
+├── sw.js                   ← Service Worker: makes the app work offline
+│
+├── css/
+│   └── style.css           ← All styling: colors, layout, animations
+│
+├── icons/                  ← App icons for the home screen
+│
+└── js/                     ← All the logic, split into modules
+    ├── store.js            ← 💾 Data layer: saves/loads everything from localStorage
+    ├── stats.js            ← 📊 Calculations: volume, 1RM, records, streaks
+    ├── charts.js           ← 📈 Drawing: SVG rings, bar charts, line charts
+    ├── ui.js               ← 🖼️ UI helpers: modals, alerts, toasts, haptics
+    ├── picker.js           ← 🔍 Exercise selection modal with search
+    ├── workout.js          ← 🏋️ The live workout screen (sets, timer, PR detection)
+    ├── routines.js         ← 📝 Routine templates (create, edit, start)
+    ├── history.js          ← 📅 Past workouts: calendar and detail views
+    ├── trends.js           ← 📈 Long-term trends: load, per-exercise, body weight
+    ├── exercises.js        ← 📋 Exercise library: browse, create, detail
+    ├── settings.js         ← ⚙️ Settings panel: goals, units, backup
+    ├── summary.js          ← 🏠 Home screen: rings, week, quick start
+    └── app.js              ← 🚀 Main entry: navigation, init, wiring
+```
 
-The daily target is derived from your body weight: `body weight × g per kg`, adjustable from 1.4
-(maintain) to 2.2 (cutting), or a fixed number if you prefer. Log intake with the +20/+30/+40 buttons
-or an exact amount; the summary band, a 14-day chart, the streak and the 7-day average all follow.
-Log a body weight under Trends → Body once and the target keeps itself up to date.
+---
 
-## Metrics
+## 🧩 How does the app work? (For absolute beginners)
 
-- **Volume** = weight × reps, summed over working sets
-- **Estimated 1RM** — Epley, `weight × (1 + reps / 30)`, capped at 20 reps
-- **Records** — best estimated 1RM and heaviest set per exercise, computed from the log rather than stored
-- **Muscle diagrams** — each exercise shows a body outline with its muscle group filled in
+### The Big Picture
 
-Weights are always stored in kilograms and converted for display, so switching between kg and lb is lossless.
+The app is a **Single Page Application (SPA)**. That means there is only ONE
+HTML file (`index.html`). Instead of loading new pages, JavaScript shows and
+hides different sections ("views"). Think of it like a book where you flip
+between chapters – but all chapters are already in front of you and only one
+is visible at a time.
 
-## Haptics
+### Step by step: What happens when you open the app
 
-Two mechanisms, both no-ops where unsupported. `navigator.vibrate` covers Android and desktop Chrome.
-Safari exposes no Vibration API, so a hidden `switch` checkbox is toggled instead — the one control iOS
-gives a system haptic to (17.4 and later). Sound is never used as a stand-in for haptics; the only tone
-in the app marks the end of the rest timer.
+```
+1. Browser loads index.html
+   └── index.html loads style.css (makes it look pretty)
+   └── index.html loads all .js files (makes it work)
 
-## Apple Health
+2. app.js runs automatically when the page is ready
+   └── It calls init(), which:
+       ├── Connects all buttons to their functions ("binding")
+       ├── Shows the Summary tab (home screen)
+       ├── Restores any workout that was running before (in case you closed the browser)
+       └── Registers the Service Worker (for offline use)
 
-There is no direct connection, and there cannot be one. HealthKit is only available to native apps
-signed and distributed by Apple; Safari exposes no HealthKit interface, not even for a web app added
-to the home screen.
+3. User taps a tab (e.g. "Workout")
+   └── app.js hides the old view, shows the new one
+   └── The new view's render() function runs
+       └── It reads data from Store
+       └── It builds HTML strings
+       └── It puts them into the page (innerHTML)
+```
 
-What does work is the Shortcuts app, which *can* write to Health and *can* be launched from a website:
+### How data is stored
 
-1. Create a shortcut, e.g. **Log Gym Workout**, with a *Log Health Sample* / *Log Workout* action
-   (Traditional Strength Training).
-2. Fill duration and start date from **Shortcut Input** — the app hands over JSON with `start`, `end`,
-   `durationMinutes`, `volumeKg`, `sets`, `reps`, `title` and `exercises`.
-3. Enter the shortcut's name in **Settings → Apple Health**.
+All data lives in **localStorage** – a tiny database built into every browser.
+It's like a dictionary: you give it a name (key) and some text (value).
 
-A *Send to Apple Health* button then appears on the workout summary.
+```
+Key                    → Value (JSON text)
+─────────────────────────────────────────
+gym_workouts           → [{id: "...", date: "...", exercises: [...]}]
+gym_templates          → [{id: "...", name: "Push Day", exercises: [...]}]
+gym_custom_exercises   → [{id: "...", name: "Cable Lateral Raise", ...}]
+gym_settings           → {unit: "kg", goalVolume: 20000, ...}
+gym_active_workout     → {id: "...", startedAt: 123456, exercises: [...]}
+gym_bodyweight         → [{date: "2026-01-15", weight: 80}]
+```
 
-## Install on iPhone
+> ⚠️ localStorage is specific to this browser on this device. If you clear
+> browser data or switch browsers, the data is gone – that's why the
+> backup/restore feature exists.
 
-Open the page in Safari → share button → **Add to Home Screen**. It then runs full screen without the
-address bar, works offline through a service worker, and iOS is far less likely to clear its stored data.
+### How a workout is tracked
 
-Because storage is local to the browser, **export a backup now and then**
-(Settings → Data → Export backup). The app reminds you if your last export is more than a month old.
-Import merges by id, so restoring never duplicates sessions.
+```
+1. User taps "Start Workout"
+   └── workout.js creates a new workout object in memory
+   └── Saves it to localStorage immediately (so a crash doesn't lose data)
 
-## Run locally
+2. User adds exercises via the Picker
+   └── picker.js shows a searchable list of all exercises
+   └── Selected exercises get added to the workout
+
+3. For each set, the user fills in weight + reps
+   └── Every keystroke saves to localStorage
+   └── If the exercise is "unilateral", there are two reps fields (L + R)
+
+4. User taps the checkmark → set is completed
+   └── stats.js calculates estimated 1RM
+   └── If it's a new personal record → toast notification + haptic feedback
+   └── If auto-rest is on → rest timer starts
+
+5. User taps "Finish"
+   └── Only completed sets are saved to the permanent workout log
+   └── Active workout is cleared from localStorage
+   └── Summary screen shows updated rings and records
+```
+
+### How the modules talk to each other
+
+```
+┌──────────┐    reads/writes    ┌──────────┐
+│  store   │◄──────────────────►│ browser  │
+│  .js     │                    │ localStorage
+└────▲─────┘                    └──────────┘
+     │ data access
+     │
+┌────┴─────────────────────────────────────┐
+│              stats.js                     │
+│  (calculates from raw data)              │
+└────▲─────────────────────────────────────┘
+     │ derived values
+     │
+┌────┴─────────────────────────────────────┐
+│           View Modules                    │
+│  summary / workout / routines / history  │
+│  trends / exercises / settings           │
+│  (each builds its own HTML)              │
+└────▲─────────────────────────────────────┘
+     │ display
+     │
+┌────┴─────────────────────────────────────┐
+│           ui.js / charts.js              │
+│  (sheets, toasts, SVG charts)            │
+└──────────────────────────────────────────┘
+     │
+┌────┴─────────────────────────────────────┐
+│             app.js                        │
+│  (navigation, init, ties it all together)│
+└──────────────────────────────────────────┘
+```
+
+---
+
+## 📄 What does each JavaScript file do? (Detailed)
+
+### `store.js` – The Data Layer 💾
+This is the app's "brain". It holds:
+- **68 built-in exercises** with muscle group, category, and unilateral flag
+- Functions to **read/write** workouts, routines, custom exercises and settings
+- **Unit conversion** (kg ↔ lb) – weights are always stored in kg internally
+- **Backup/restore** – export everything as JSON, import it back
+
+### `stats.js` – The Calculator 📊
+Takes raw data from the Store and derives useful numbers:
+- **Volume** = weight × reps (per set, workout, week, or all time)
+- **Estimated 1RM** = Epley formula: `weight × (1 + reps / 30)`
+- **Rings** = how much of your weekly goal you've completed
+- **Streaks** = how many consecutive weeks you met your goal
+- **Per-exercise progression** = 1RM / weight / volume over time
+
+### `charts.js` – The Drawing Module 📈
+Creates all visualizations as **SVG** (a format for graphics that scales perfectly):
+- **Activity Rings** – like the Apple Watch rings
+- **Bar Charts** – weekly volume, daily volume
+- **Line Charts** – exercise progression with smooth curves
+- **Calendar** – one ring per training day in a month grid
+
+### `ui.js` – The Interface Toolkit 🖼️
+Reusable UI components that the other modules use:
+- **Sheets** – slide-up panels (like iOS)
+- **Action Sheets** – lists of options to pick from
+- **Alerts / Confirms** – "Are you sure?" dialogs
+- **Toasts** – temporary messages that fade away
+- **Haptics** – vibration feedback on button presses
+- **Beep** – sound effect when the rest timer ends
+
+### `picker.js` – Exercise Picker 🔍
+The full-screen modal to search and select exercises:
+- Search by name, filter by muscle group
+- "Recent" section shows exercises you've used lately
+- Multi-select mode for adding several at once
+- "Create New Exercise" button at the bottom
+
+### `workout.js` – Live Workout Screen 🏋️
+The core feature – the screen where you actually log sets:
+- Running clock, volume counter
+- Add/remove exercises and sets
+- Unilateral mode (L/R columns)
+- Set types: Normal, Warm-up, Drop set, To Failure
+- Real-time PR detection
+- "Previous" column showing what you did last time
+- Plate calculator for barbell exercises
+- Auto-save every change
+
+### `routines.js` – Templates 📝
+Create reusable workout templates:
+- Set target weights and reps
+- Unilateral toggle per exercise
+- Start with one tap – previous values are filled in
+- Save a finished workout as a new routine
+
+### `history.js` – Past Workouts 📅
+Two ways to view your history:
+- **Calendar mode** – month view with rings showing training days
+- **List mode** – searchable, grouped by month
+- **Workout Detail** – every set with weight, reps, and estimated 1RM
+
+### `trends.js` – Long-term Progress 📈
+Three sub-tabs:
+- **Overview** – 12-week training load chart, sessions per week, muscle split
+- **Exercise** – pick any exercise and see its 1RM/weight/volume/reps over time
+- **Body** – log your body weight and see the trend
+
+### `exercises.js` – Exercise Library 📋
+Browse, search and manage exercises:
+- Alphabetical list with muscle group filter
+- Create custom exercises with all the same properties as built-in ones
+- Exercise Detail shows records, 1RM chart, and session history
+
+### `settings.js` – Settings Panel ⚙️
+All configuration:
+- Weekly goals (volume, workouts, sets) – drive the summary rings
+- Unit switch (kg / lb)
+- Rest timer defaults
+- Bar weight for plate calculator
+- Export / import backup
+- Apple Health integration via Shortcuts
+- Delete all data
+
+### `summary.js` – Home Screen 🏠
+The first thing you see:
+- Weekly goal rings (volume, workouts, sets)
+- This Week strip with mini rings per day
+- Start Workout / resume button
+- Quick-start chips for your routines
+- Statistics tiles (streak, last workout, vs last week)
+- 14-day volume chart
+- Recent personal records
+- Last 3 workouts
+
+### `app.js` – Main Controller 🚀
+Ties everything together:
+- Tab navigation (show/hide views, remember scroll position)
+- Init function that binds all modules
+- Service Worker registration (offline support)
+- Back gesture handling (close modals instead of leaving the app)
+- Backup reminders
+
+---
+
+## 🛠️ Run it locally
 
 ```bash
-npx http-server . -p 8080
+# No build step needed! Just serve the files:
+npx -y http-server . -p 8080 -o
+
+# Then open http://localhost:8080 in your browser
 ```
 
-Then open `http://localhost:8080`. A plain file:// open works too, minus the service worker.
+## 🚀 Deploy to GitHub Pages
 
-## Structure
+```bash
+# 1. Make sure all files are committed
+git add .
+git commit -m "Initial commit"
+git push origin main
 
-```
-├── index.html                – all screens
-├── manifest.webmanifest      – PWA metadata
-├── sw.js                     – offline cache
-├── icons/                    – app icons
-├── css/style.css             – design system
-└── js/
-    ├── store.js              – persistence, exercise database, settings, backup
-    ├── stats.js              – everything derived: volume, goals, records, streaks, protein
-    ├── charts.js             – SVG bars, lines, calendar (no chart library)
-    ├── muscles.js            – body diagrams per muscle group
-    ├── ui.js                 – sheets, action sheets, alerts, toasts, haptics
-    ├── nutrition.js          – protein target and logging
-    ├── picker.js             – exercise picker
-    ├── workout.js            – live training screen, supersets, rest timer
-    ├── routines.js           – templates and their editor
-    ├── history.js            – calendar, session list, session detail
-    ├── trends.js             – long range progress, body weight, protein
-    ├── exercises.js          – library, editor, exercise detail
-    ├── settings.js           – goals, units, backup, Apple Health
-    ├── summary.js            – landing screen
-    └── app.js                – navigation and bootstrap
+# 2. Go to your repo on GitHub
+#    Settings → Pages → Source: "main" / root → Save
+
+# 3. After ~1 minute your app is live at:
+#    https://paulweber-co.github.io/BIB-BUB-Gym-Tracking/
 ```
 
-## Data
+---
 
-Workouts logged with earlier versions keep working — storage keys and the workout shape are unchanged,
-new fields are additive.
+## 🔧 Tech Stack
 
-```js
-gym_workouts          // sessions with exercises and sets
-gym_templates         // routines
-gym_custom_exercises  // your own exercises
-gym_bodyweight        // body weight log
-gym_protein           // daily protein intake
-gym_settings          // goals, units, timers
-gym_active_workout    // the session currently running
+| Technology | What it does |
+|---|---|
+| **HTML** | Page structure (just one file!) |
+| **CSS** | All styling, animations, dark theme |
+| **JavaScript** | All logic, no frameworks, no build step |
+| **localStorage** | Data storage (in the browser) |
+| **SVG** | Charts and rings (no chart library needed) |
+| **Service Worker** | Offline caching |
+| **PWA Manifest** | Install on home screen |
+
+> **No React, no Vue, no Node.js, no database, no server.**
+> Just plain HTML + CSS + JS that runs directly in the browser.
+
+---
+
+## 📱 Optimized for
+
+- iPhone 12 (390 × 844)
+- iOS Safari (PWA mode)
+- Safe area insets for notch + home indicator
+- Touch targets ≥ 44px
+- Dark theme
+
+---
+
+## 📦 Data Format
+
+Every workout is stored as a JSON object like this:
+
+```json
+{
+  "id": "workout-abc123",
+  "date": "2026-08-10T14:30:00.000Z",
+  "endTime": "2026-08-10T15:45:00.000Z",
+  "duration": 4500000,
+  "name": "Push Day",
+  "exercises": [
+    {
+      "exerciseId": "ex-bench-press",
+      "isUnilateral": false,
+      "notes": "Felt strong today",
+      "sets": [
+        { "weight": 80, "reps": 8, "type": "normal", "completed": true },
+        { "weight": 80, "reps": 7, "type": "normal", "completed": true }
+      ]
+    },
+    {
+      "exerciseId": "ex-db-curl",
+      "isUnilateral": true,
+      "notes": "",
+      "sets": [
+        { "weight": 14, "repsL": 12, "repsR": 10, "type": "normal", "completed": true }
+      ]
+    }
+  ]
+}
 ```
+
+---
+
+## 📄 License
+
+MIT – use it however you want.

@@ -1,6 +1,16 @@
 /* ============================================================
-   SETTINGS — goals, units, timers, backup and the Apple Health
-   hand-off via the Shortcuts URL scheme.
+   SETTINGS — Einstellungen, Wochenziele, Einheiten, Backup & Health
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   Verwaltet das Einstellungen-Sheet:
+   1. Wochenziele (Volumen, Workouts, Arbeitssätze)
+   2. Einheiten-Umschaltung (kg / lb)
+   3. Trainings-Einstellungen (Pause-Timer, Ton, Vibration, Hantelstangen-Gewicht)
+   4. Apple Health Hand-off Erklärung & Shortcut-Verknüpfung
+   5. Daten-Backup (JSON Export / Import) und Daten löschen
+   6. App zur Hülle / Home-Screen hinzufügen Erklärung
    ============================================================ */
 
 const Settings = (() => {
@@ -16,6 +26,7 @@ const Settings = (() => {
         });
     }
 
+    /** render(el, api) — Baut die Einstellungen-Benutzeroberfläche auf. */
     function render(el, api) {
         const s = Store.settings();
         const bytes = Store.storageSize();
@@ -24,7 +35,14 @@ const Settings = (() => {
         const proteinTarget = Store.proteinTarget();
 
         el.innerHTML = `
-            <div class="section-title"><h2>Goals</h2></div>
+            <div class="section-title"><h2 style="font-size:1.0625rem">Appearance</h2></div>
+            <div class="segmented" data-role="theme">
+                <button data-theme="dark" class="${s.theme === 'dark' ? 'is-active' : ''}">Dark</button>
+                <button data-theme="light" class="${s.theme === 'light' ? 'is-active' : ''}">Light</button>
+                <button data-theme="system" class="${s.theme === 'system' ? 'is-active' : ''}">System</button>
+            </div>
+
+            <div class="section-title"><h2 style="font-size:1.0625rem">Weekly Goals</h2></div>
             <div class="list">
                 <button class="list-row" data-act="protein">
                     <div class="list-row-main">
@@ -174,6 +192,9 @@ const Settings = (() => {
             </div>`;
     }
 
+    /* ──────────────────────────────────────────────────────────
+       EVENTS — Interaktionen in den Einstellungen
+       ────────────────────────────────────────────────────────── */
     function bind(el, api) {
         const rerender = () => { render(el, api); App.refreshAll(); };
 
@@ -201,6 +222,14 @@ const Settings = (() => {
                     Store.setSetting(key, Math.min(300, Math.max(5, s.goalSets + dir * 5)));
                 }
                 UI.haptic('tap');
+                rerender();
+            });
+        });
+
+        el.querySelectorAll('[data-role="theme"] button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                Store.setSetting('theme', btn.dataset.theme);
+                Store.applyTheme(btn.dataset.theme);
                 rerender();
             });
         });
@@ -277,9 +306,9 @@ const Settings = (() => {
         });
     }
 
-    // ------------------------------------------------------------
-    // Backup
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       BACKUP & HEALTH
+       ────────────────────────────────────────────────────────── */
     function exportBackup() {
         const data = Store.exportAll();
         const stamp = new Date().toISOString().slice(0, 10);
@@ -321,9 +350,6 @@ const Settings = (() => {
         input.click();
     }
 
-    // ------------------------------------------------------------
-    // Apple Health
-    // ------------------------------------------------------------
     function healthInfo() {
         UI.sheet({
             title: 'Apple Health',

@@ -1,20 +1,31 @@
 /* ============================================================
-   HISTORY — training calendar, past sessions and their detail.
+   HISTORY — Kalender, Workout-Historie und Detailansicht
+   ============================================================
+
+   WAS MACHT DIESE DATEI?
+   ─────────────────────
+   Verwaltet die Trainingshistorie ("History"-Tab):
+   1. Kalender-Modus (Monatsübersicht mit Aktivitätsringen pro Tag)
+   2. Listen-Modus (Durchsuchbare Liste aller absolvierten Einheiten)
+   3. Workout-Detailansicht (Sätze, Volumen, PRs, Muskelverteilung)
+   4. Aktionen im Detailmenü (Wiederholen, Als Routine speichern, Löschen)
    ============================================================ */
 
 const History = (() => {
 
-    let mode = 'calendar';           // calendar | list
-    let cursor = new Date();         // month shown in calendar mode
-    let query = '';
-    let detailId = null;
+    let mode = 'calendar';           // 'calendar' oder 'list'
+    let cursor = new Date();         // Angezeigter Monat im Kalender-Modus
+    let query = '';                  // Suchtext für den Listen-Modus
+    let detailId = null;             // ID des gerade geöffneten Workouts
 
     const body = () => document.getElementById('history-body');
     const detailBody = () => document.getElementById('workout-detail-body');
 
-    // ------------------------------------------------------------
-    // Tab
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       TAB — Hauptansicht des History-Tabs
+       ────────────────────────────────────────────────────────── */
+
+    /** render() — Baut den History-Tab auf (Kalender oder Liste). */
     function render() {
         const parts = [];
 
@@ -29,6 +40,7 @@ const History = (() => {
         bindDynamic();
     }
 
+    /** renderCalendar() — Rendert den Monatskalender mit Ring-Aktivitäten. */
     function renderCalendar() {
         const year = cursor.getFullYear();
         const month = cursor.getMonth();
@@ -90,6 +102,7 @@ const History = (() => {
                 : sessions.map(card).join('')}`;
     }
 
+    /** renderList() — Baut die nach Monat gruppierte Workout-Liste mit Suchfeld auf. */
     function renderList() {
         let workouts = Store.workouts();
         if (query) {
@@ -132,6 +145,7 @@ const History = (() => {
         return html;
     }
 
+    /** card(w) — Erzeugt die Vorschau-Karte für ein absolviertes Workout. */
     function card(w) {
         const t = Stats.workoutTotals(w);
         const names = (w.exercises || []).map(ex => Store.exerciseName(ex.exerciseId));
@@ -164,9 +178,11 @@ const History = (() => {
             </button>`;
     }
 
-    // ------------------------------------------------------------
-    // Detail
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       DETAIL — Detailansicht eines vergangenen Workouts
+       ────────────────────────────────────────────────────────── */
+
+    /** openDetail(id) — Öffnet den Vollbild-Detail-Screen für ein geglücktes Workout. */
     function openDetail(id) {
         const w = Store.workout(id);
         if (!w) return;
@@ -314,7 +330,6 @@ const History = (() => {
         });
     }
 
-    /** Starts a new session with the same exercises; sets are prefilled from the last time. */
     async function repeatWorkout(w) {
         if (Workout.isActive()) {
             UI.alert({ title: 'Workout in progress', message: 'Finish or discard the running workout first.' });
@@ -327,9 +342,9 @@ const History = (() => {
         }, 360);
     }
 
-    // ------------------------------------------------------------
-    // Events
-    // ------------------------------------------------------------
+    /* ──────────────────────────────────────────────────────────
+       EVENTS
+       ────────────────────────────────────────────────────────── */
     function bindDynamic() {
         const root = body();
 
