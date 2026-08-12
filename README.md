@@ -1,4 +1,4 @@
-# 💪 BIB-BUB Gym Tracker
+# Gym Tracker
 
 A gym workout tracking web app – track exercises, create routines, and monitor your progress.
 Works 100 % offline, no account needed, no server – all data stays in your browser.
